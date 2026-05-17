@@ -1,0 +1,40 @@
+<div class="cb-preview">
+    <div class="cb-preview__label">
+        <span>Previa</span>
+        <span class="cb-badge">9:16</span>
+    </div>
+    <div class="cb-preview__viewport" (mousedown)="startPan($event)" (mousemove)="movePan($event)" (mouseup)="stopPan()"
+        (mouseleave)="stopPan()" (wheel)="onWheel($event)">
+        <img *ngIf="showTemplate && manifest?.templatePreviewUrl" class="cb-preview__template"
+            [src]="manifest?.templatePreviewUrl" [style.opacity]="templateOpacity" [style.transform]="transformStyle"
+            alt="template" />
+        <canvas #canvas class="cb-preview__canvas" [style.transform]="transformStyle"></canvas>
+    </div>
+    <div class="cb-preview__controls">
+        <button class="cb-btn-secondary" type="button" (click)="zoomOut()">-</button>
+        <span class="cb-muted">{{ (zoom * 100) | number : '1.0-0' }}%</span>
+        <button class="cb-btn-secondary" type="button" (click)="zoomIn()">+</button>
+        <button class="cb-btn-secondary" type="button" (click)="resetView()">Ajustar</button>
+
+        <span class="cb-preview__divider"></span>
+
+        <button class="cb-icon-btn" type="button" [class.is-active]="showTemplate"
+            (click)="showTemplate = !showTemplate" title="Exibir/ocultar template">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+            </svg>
+        </button>
+
+        <label class="cb-preview__opacity-label" title="Opacidade do template">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 2a10 10 0 0 1 0 20z" />
+            </svg>
+            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="templateOpacity" class="cb-preview__slider"
+                [disabled]="!showTemplate" />
+        </label>
+    </div>
+</div>

@@ -1,0 +1,33 @@
+<div class="cb-modal" *ngIf="open">
+    <div class="cb-modal__backdrop" (click)="cancel.emit()"></div>
+    <div class="cb-modal__content cb-card">
+        <div class="cb-modal__head">
+            <p class="cb-section-title">Character Builder</p>
+            <h3>Novo projeto</h3>
+        </div>
+
+        <label class="cb-modal__field">
+            <span>Nome do projeto</span>
+            <input class="form-control" [(ngModel)]="localName" placeholder="Projeto Personagem RPG" autofocus />
+        </label>
+
+        <label class="cb-modal__field">
+            <span>Template mestre <span class="cb-muted">(opcional)</span></span>
+            <div class="cb-modal__file">
+                <label class="cb-btn-secondary cb-modal__file-label" for="templateInput">
+                    {{ templateFile ? templateFile.name : 'Escolher PNG' }}
+                </label>
+                <input id="templateInput" type="file" accept="image/png" (change)="onTemplateChange($event)" hidden />
+                <button *ngIf="templateFile" class="cb-modal__file-clear" type="button"
+                    (click)="templateFile = null">&#x2715;</button>
+            </div>
+            <span class="cb-muted cb-modal__field-hint">Imagem de alinhamento das camadas.</span>
+        </label>
+
+        <div class="cb-modal__actions">
+            <button class="cb-btn-secondary" type="button" (click)="cancel.emit()">Cancelar</button>
+            <button class="cb-btn-primary" type="button" [disabled]="!localName.trim()" (click)="onConfirm()">Criar
+                projeto</button>
+        </div>
+    </div>
+</div>

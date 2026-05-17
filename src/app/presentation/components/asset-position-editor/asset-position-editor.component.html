@@ -1,0 +1,22 @@
+<div class="cb-card cb-editor" *ngIf="asset">
+    <div class="cb-section-title">Editor de posicionamento</div>
+    <div class="cb-editor__grid">
+        <label>
+            X
+            <input class="form-control" type="number" [(ngModel)]="transform.x" />
+        </label>
+        <label>
+            Y
+            <input class="form-control" type="number" [(ngModel)]="transform.y" />
+        </label>
+        <label>
+            Escala
+            <input class="form-control" type="number" step="0.05" [(ngModel)]="transform.scale" />
+        </label>
+        <label>
+            Rotacao
+            <input class="form-control" type="number" step="1" [(ngModel)]="transform.rotation" />
+        </label>
+    </div>
+    <button class="cb-btn-primary" type="button" (click)="apply()">Aplicar</button>
+</div>

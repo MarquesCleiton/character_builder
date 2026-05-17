@@ -1,0 +1,41 @@
+<div class="cb-actions">
+    <button class="cb-btn-randomize" type="button" (click)="randomize.emit()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <circle cx="15.5" cy="8.5" r="1.5"></circle>
+            <circle cx="15.5" cy="15.5" r="1.5"></circle>
+            <circle cx="8.5" cy="15.5" r="1.5"></circle>
+            <circle cx="12" cy="12" r="1.5"></circle>
+        </svg>
+        <div class="cb-btn-randomize__text">
+            <strong>GERAR ALEATÓRIO</strong>
+            <span>Randomiza todas as partes não bloqueadas</span>
+        </div>
+    </button>
+
+    <div class="cb-actions__export">
+        <span class="cb-section-title">Ações</span>
+        <div class="cb-actions__btns">
+            <button class="cb-actions__btn" type="button" (click)="copy.emit()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copiar PNG
+            </button>
+            <button class="cb-actions__btn" type="button" (click)="exportPng.emit()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Salvar PNG
+            </button>
+        </div>
+        <p class="cb-muted">A imagem será exportada com fundo transparente.</p>
+    </div>
+</div>

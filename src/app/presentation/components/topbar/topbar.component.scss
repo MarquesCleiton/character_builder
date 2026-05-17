@@ -1,0 +1,121 @@
+.cb-topbar {
+    display: flex;
+    align-items: center;
+    padding: 0 28px;
+    height: 64px;
+    background: var(--cb-topbar-bg);
+    color: #f6f2ea;
+    box-shadow: 0 2px 16px var(--cb-shadow);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    flex-shrink: 0;
+}
+
+.cb-topbar__brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.cb-topbar__logo {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--cb-accent);
+    color: #0b0b0a;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.cb-topbar__title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.2px;
+}
+
+.cb-topbar__subtitle {
+    font-size: 0.72rem;
+    color: rgba(246, 242, 234, 0.5);
+}
+
+.cb-topbar__sep {
+    width: 1px;
+    height: 32px;
+    background: rgba(246, 242, 234, 0.1);
+    margin: 0 12px;
+    flex-shrink: 0;
+}
+
+.cb-topbar__actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    gap: 2px;
+}
+
+.cb-topbar__btn {
+    background: none;
+    border: none;
+    color: rgba(246, 242, 234, 0.65);
+    padding: 8px 14px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    font-family: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cb-topbar__btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #f6f2ea;
+}
+
+.cb-topbar__btn--accent {
+    color: var(--cb-accent);
+}
+
+.cb-topbar__btn--accent:hover {
+    background: rgba(94, 234, 212, 0.1);
+    color: var(--cb-accent);
+}
+
+.cb-topbar__btn--icon {
+    padding: 8px 10px;
+    gap: 0;
+}
+
+@media (max-width: 768px) {
+    .cb-topbar {
+        padding: 0 14px;
+        height: 54px;
+    }
+
+    .cb-topbar__logo {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+    }
+
+    .cb-topbar__btn span {
+        display: none;
+    }
+
+    .cb-topbar__btn {
+        padding: 8px 10px;
+    }
+
+    .cb-topbar__sep {
+        margin: 0 6px;
+    }
+}

@@ -1,0 +1,25 @@
+<div class="cb-welcome">
+    <header class="cb-welcome__header">
+        <p class="cb-section-title">Character Builder</p>
+        <h1 class="cb-welcome__title">Monte personagens 2D</h1>
+        <p class="cb-muted">Criação e edição por camadas, direto no navegador.</p>
+    </header>
+
+    <button class="cb-project-card" type="button" (click)="openWorkspace()">
+        <div class="cb-project-card__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+        </div>
+        <strong>Abrir pasta</strong>
+        <span class="cb-muted">Cria ou carrega um projeto</span>
+    </button>
+
+    <footer class="cb-welcome__foot">
+        <span class="cb-muted">Dados salvos localmente no seu dispositivo.</span>
+    </footer>
+</div>
+
+<app-project-name-modal [open]="showModal" [name]="projectName" (cancel)="cancelNew()" (confirm)="confirmNew($event)">
+</app-project-name-modal>

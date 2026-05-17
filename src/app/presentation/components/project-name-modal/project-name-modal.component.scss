@@ -1,0 +1,86 @@
+.cb-modal {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    z-index: 50;
+}
+
+.cb-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(24, 28, 32, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.cb-modal__content {
+    position: relative;
+    padding: 32px;
+    width: min(480px, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.cb-modal__head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cb-modal__head h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.cb-modal__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.cb-modal__field-hint {
+    font-weight: 400;
+    font-size: 0.8rem;
+}
+
+.cb-modal__file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cb-modal__file-label {
+    cursor: pointer;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+}
+
+.cb-modal__file-clear {
+    background: none;
+    border: none;
+    color: var(--cb-ink-soft);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    line-height: 1;
+}
+
+.cb-modal__file-clear:hover {
+    color: var(--cb-ink);
+    background: var(--cb-surface-soft);
+}
+
+.cb-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 4px;
+}

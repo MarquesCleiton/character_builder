@@ -1,0 +1,72 @@
+.cb-welcome {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    padding: 48px clamp(20px, 6vw, 80px);
+}
+
+.cb-welcome__header {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cb-welcome__title {
+    font-family: "Fraunces", "Georgia", "Times New Roman", serif;
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.cb-project-card {
+    background: var(--cb-surface);
+    border: 1px solid var(--cb-border);
+    border-radius: 18px;
+    box-shadow: 0 8px 24px var(--cb-shadow);
+    padding: 32px 28px;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    font-family: inherit;
+    color: var(--cb-ink);
+    text-align: center;
+}
+
+.cb-project-card:hover {
+    border-color: var(--cb-accent);
+    box-shadow: 0 12px 32px var(--cb-shadow);
+    transform: translateY(-2px);
+}
+
+.cb-project-card strong {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.cb-project-card .cb-muted {
+    font-size: 0.85rem;
+}
+
+.cb-project-card__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--cb-accent-soft);
+    color: var(--cb-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cb-welcome__foot {
+    font-size: 0.8rem;
+}
