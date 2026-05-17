@@ -1,7 +1,16 @@
+:host {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
 .cb-preview {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    flex: 1;
+    min-height: 0;
 }
 
 .cb-preview__label {
@@ -16,7 +25,8 @@
     border-radius: 16px;
     border: 1px solid var(--cb-border);
     background: var(--cb-checker);
-    min-height: clamp(180px, 30vh, 340px);
+    flex: 1;
+    min-height: 180px;
     overflow: hidden;
     position: relative;
     cursor: grab;
@@ -30,19 +40,17 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: auto;
     display: block;
     pointer-events: none;
-    transform-origin: top left;
+    transform-origin: 0 0;
 }
 
 .cb-preview__canvas {
-    width: 100%;
-    height: auto;
+    position: absolute;
+    top: 0;
+    left: 0;
     display: block;
-    transform-origin: top left;
-    position: relative;
+    transform-origin: 0 0;
 }
 
 .cb-preview__controls {

@@ -13,8 +13,13 @@ export class TopbarComponent {
     @Output() randomize = new EventEmitter<void>();
     @Output() exportPng = new EventEmitter<void>();
     @Output() help = new EventEmitter<void>();
+    @Output() renameProject = new EventEmitter<string>();
+    @Output() changeTemplate = new EventEmitter<File>();
 
     readonly version = APP_VERSION;
+
+    settingsOpen = false;
+    editingName = '';
 
     constructor(private readonly theme: ThemeService) { }
 
@@ -24,5 +29,33 @@ export class TopbarComponent {
 
     toggleTheme(): void {
         this.theme.toggle();
+    }
+
+    toggleSettings(): void {
+        this.settingsOpen = !this.settingsOpen;
+        if (this.settingsOpen) {
+            this.editingName = this.projectName;
+        }
+    }
+
+    closeSettings(): void {
+        this.settingsOpen = false;
+    }
+
+    confirmRename(): void {
+        const trimmed = this.editingName.trim();
+        if (trimmed && trimmed !== this.projectName) {
+            this.renameProject.emit(trimmed);
+        }
+        this.settingsOpen = false;
+    }
+
+    onTemplateFile(event: Event): void {
+        const input = event.target as HTMLInputElement;
+        if (input.files?.[0]) {
+            this.changeTemplate.emit(input.files[0]);
+            input.value = '';
+        }
+        this.settingsOpen = false;
     }
 }

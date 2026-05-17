@@ -1,20 +1,20 @@
 <div class="cb-preview">
     <div class="cb-preview__label">
-        <span>Previa</span>
-        <span class="cb-badge">9:16</span>
+        <span>Prévia</span>
+        <span class="cb-badge" [title]="canvasSize">{{ aspectRatioLabel }}</span>
     </div>
-    <div class="cb-preview__viewport" (mousedown)="startPan($event)" (mousemove)="movePan($event)" (mouseup)="stopPan()"
-        (mouseleave)="stopPan()" (wheel)="onWheel($event)">
+    <div class="cb-preview__viewport" #viewport (mousedown)="startPan($event)" (mousemove)="movePan($event)"
+        (mouseup)="stopPan()" (mouseleave)="stopPan()">
         <img *ngIf="showTemplate && manifest?.templatePreviewUrl" class="cb-preview__template"
             [src]="manifest?.templatePreviewUrl" [style.opacity]="templateOpacity" [style.transform]="transformStyle"
-            alt="template" />
+            [style.width.px]="canvasWidth" [style.height.px]="canvasHeight" alt="template" />
         <canvas #canvas class="cb-preview__canvas" [style.transform]="transformStyle"></canvas>
     </div>
     <div class="cb-preview__controls">
         <button class="cb-btn-secondary" type="button" (click)="zoomOut()">-</button>
         <span class="cb-muted">{{ (zoom * 100) | number : '1.0-0' }}%</span>
         <button class="cb-btn-secondary" type="button" (click)="zoomIn()">+</button>
-        <button class="cb-btn-secondary" type="button" (click)="resetView()">Ajustar</button>
+        <button class="cb-btn-secondary" type="button" (click)="fitView()">Centralizar</button>
 
         <span class="cb-preview__divider"></span>
 

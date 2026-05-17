@@ -121,10 +121,28 @@ export class EditorPageComponent {
 
     async exportPng(): Promise<void> {
         const blob = await this.exporter.exportPng(this.store.snapshot);
+        const suggestedName = `${this.store.snapshot.name ?? 'personagem'}.png`;
+
+        if ('showSaveFilePicker' in window) {
+            try {
+                const handle = await (window as any).showSaveFilePicker({
+                    suggestedName,
+                    types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                return;
+            } catch (e) {
+                if ((e as Error).name === 'AbortError') return;
+                // Fall through to legacy download on other errors
+            }
+        }
+
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = 'personagem.png';
+        anchor.download = suggestedName;
         anchor.click();
         URL.revokeObjectURL(url);
     }
@@ -168,6 +186,14 @@ export class EditorPageComponent {
         }
         await this.store.updateTemplate(input.files[0]);
         input.value = '';
+    }
+
+    onRenameProject(name: string): void {
+        this.store.renameProject(name);
+    }
+
+    async onChangeTemplate(file: File): Promise<void> {
+        await this.store.updateTemplate(file);
     }
 
 }

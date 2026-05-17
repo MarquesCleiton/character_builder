@@ -25,7 +25,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     templateImage: HTMLImageElement | null = null;
     elementUrl = '';
 
-    pos = { x: EXPORT_WIDTH / 2, y: EXPORT_HEIGHT / 2 };
+    pos = { x: 0, y: 0 };
     rotation = 0;
     scale = 1;
     opacity = 1;
@@ -52,6 +52,9 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         private readonly importState: AssetImportStateService
     ) { }
 
+    private get canvasW(): number { return this.store.snapshot.canvasWidth || EXPORT_WIDTH; }
+    private get canvasH(): number { return this.store.snapshot.canvasHeight || EXPORT_HEIGHT; }
+
     ngOnInit(): void {
         if (!this.importState.pendingBlob) {
             this.router.navigate(['/editor']);
@@ -70,7 +73,11 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
                 this.scale = t.scale;
                 this.rotation = t.rotation;
                 // opacity is kept at 1 (preview-only); user can adjust for positioning
+            } else {
+                this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
             }
+        } else {
+            this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
         }
     }
 
@@ -101,9 +108,9 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         const ctx = canvas.getContext('2d');
         if (!ctx || !this.elementImage) return;
 
-        canvas.width = EXPORT_WIDTH;
-        canvas.height = EXPORT_HEIGHT;
-        ctx.clearRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+        canvas.width = this.canvasW;
+        canvas.height = this.canvasH;
+        ctx.clearRect(0, 0, this.canvasW, this.canvasH);
 
         if (this.cropMode) {
             this.drawCropMode(ctx);
@@ -113,7 +120,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         if (this.templateImage) {
             ctx.save();
             ctx.globalAlpha = this.templateOpacity;
-            ctx.drawImage(this.templateImage, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+            ctx.drawImage(this.templateImage, 0, 0, this.canvasW, this.canvasH);
             ctx.restore();
         }
 
@@ -186,12 +193,12 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     private getCropFitTransform(): { fitScale: number; ox: number; oy: number } {
         if (!this.elementImage) return { fitScale: 1, ox: 0, oy: 0 };
         const fitScale = Math.min(
-            (EXPORT_WIDTH * 0.9) / this.elementImage.naturalWidth,
-            (EXPORT_HEIGHT * 0.9) / this.elementImage.naturalHeight
+            (this.canvasW * 0.9) / this.elementImage.naturalWidth,
+            (this.canvasH * 0.9) / this.elementImage.naturalHeight
         );
         const iw = this.elementImage.naturalWidth * fitScale;
         const ih = this.elementImage.naturalHeight * fitScale;
-        return { fitScale, ox: (EXPORT_WIDTH - iw) / 2, oy: (EXPORT_HEIGHT - ih) / 2 };
+        return { fitScale, ox: (this.canvasW - iw) / 2, oy: (this.canvasH - ih) / 2 };
     }
 
     private canvasToCropImageCoords(cx: number, cy: number): { x: number; y: number } {
@@ -210,7 +217,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
         ctx.drawImage(this.elementImage, ox, oy, iw, ih);
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+        ctx.fillRect(0, 0, this.canvasW, this.canvasH);
 
         if (this.cropRect && this.cropRect.w > 1 && this.cropRect.h > 1) {
             const rx = ox + this.cropRect.x * fitScale;
@@ -357,12 +364,12 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     }
 
     center(): void {
-        this.pos = { x: EXPORT_WIDTH / 2, y: EXPORT_HEIGHT / 2 };
+        this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
         this.draw();
     }
 
     resetTransform(): void {
-        this.pos = { x: EXPORT_WIDTH / 2, y: EXPORT_HEIGHT / 2 };
+        this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
         this.rotation = 0;
         this.scale = 1;
         this.opacity = 1;

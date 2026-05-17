@@ -73,13 +73,20 @@ export class WorkspaceStore {
         if (!this.workspaceHandle) {
             return;
         }
+        const bitmap = await createImageBitmap(file);
+        const canvasWidth = bitmap.width;
+        const canvasHeight = bitmap.height;
+        bitmap.close();
+
         const templatePath = await this.files.saveTemplateImage(this.workspaceHandle, file);
         const templatePreviewUrl = URL.createObjectURL(file);
         this.trackObjectUrl(templatePreviewUrl);
         this.commit({
             ...this.snapshot,
             templateImage: templatePath,
-            templatePreviewUrl
+            templatePreviewUrl,
+            canvasWidth,
+            canvasHeight
         });
     }
 
@@ -195,6 +202,10 @@ export class WorkspaceStore {
 
     reorderLayers(newOrder: AssetCategory[]): void {
         this.commit({ ...this.snapshot, layers: newOrder });
+    }
+
+    renameProject(name: string): void {
+        this.commit({ ...this.snapshot, name });
     }
 
     randomize(): void {

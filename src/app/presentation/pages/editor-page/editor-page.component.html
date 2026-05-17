@@ -1,45 +1,52 @@
 <app-topbar [projectName]="(manifest$ | async)?.name ?? 'Novo Projeto'" (openProject)="openWorkspace()"
-    (randomize)="randomize()" (exportPng)="exportPng()" (help)="goToImport()">
+    (randomize)="randomize()" (exportPng)="exportPng()" (help)="goToImport()" (renameProject)="onRenameProject($event)"
+    (changeTemplate)="onChangeTemplate($event)">
 </app-topbar>
 
 <ng-container *ngIf="manifest$ | async as manifest">
     <div class="cb-editor">
-        <!-- Coluna esquerda: prévia + camadas -->
+        <!-- Coluna esquerda: prévia + camadas + exportar -->
         <div class="cb-editor__left">
             <app-preview-canvas [manifest]="manifest"></app-preview-canvas>
+            <div class="cb-preview-actions">
+                <button class="cb-preview-actions__btn" type="button" (click)="copyPng()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    Copiar PNG
+                </button>
+                <button class="cb-preview-actions__btn" type="button" (click)="exportPng()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Salvar PNG
+                </button>
+            </div>
             <app-layers-panel [manifest]="manifest" (reorder)="reorderLayers($event)"
                 (toggleVisibility)="toggleVisibility($event)">
             </app-layers-panel>
         </div>
 
-        <!-- Coluna direita: personalização -->
+        <!-- Coluna direita: todas as categorias -->
         <div class="cb-editor__right">
             <p class="cb-section-title cb-editor__section-label">Personalizar</p>
 
             <div class="cb-editor__panel-wrap">
-                <!-- Nav vertical de categorias -->
-                <nav class="cb-panel-nav">
-                    <button *ngFor="let cat of categories" class="cb-panel-nav__btn" type="button"
-                        [class.is-active]="panelCategory === cat" (click)="setPanelCategory(cat)">
-                        {{ labels[cat] }}
-                    </button>
-                </nav>
-
-                <!-- Categoria ativa -->
                 <div class="cb-editor__panel">
-                    <app-category-browser [title]="labels[panelCategory]" [items]="manifest.assets[panelCategory]"
-                        [selectedId]="manifest.selected[panelCategory]"
-                        [locked]="manifest.locked[panelCategory] ?? false" (select)="onSelect(panelCategory, $event)"
-                        (prev)="onPrev(panelCategory, manifest.assets[panelCategory], manifest.selected[panelCategory])"
-                        (next)="onNext(panelCategory, manifest.assets[panelCategory], manifest.selected[panelCategory])"
-                        (openGallery)="openGallery(panelCategory)" (toggleLock)="toggleLock(panelCategory)"
-                        (importFile)="onImportFile(panelCategory, $event)"
-                        (deleteAsset)="onDeleteAsset(panelCategory, $event)"
-                        (editAsset)="onEditAsset(panelCategory, $event)">
+                    <app-category-browser *ngFor="let cat of categories" [title]="labels[cat]"
+                        [items]="manifest.assets[cat]" [selectedId]="manifest.selected[cat]"
+                        [locked]="manifest.locked[cat] ?? false" (select)="onSelect(cat, $event)"
+                        (prev)="onPrev(cat, manifest.assets[cat], manifest.selected[cat])"
+                        (next)="onNext(cat, manifest.assets[cat], manifest.selected[cat])"
+                        (openGallery)="openGallery(cat)" (toggleLock)="toggleLock(cat)"
+                        (importFile)="onImportFile(cat, $event)" (deleteAsset)="onDeleteAsset(cat, $event)"
+                        (editAsset)="onEditAsset(cat, $event)">
                     </app-category-browser>
-
-                    <app-actions-bar (randomize)="randomize()" (copy)="copyPng()" (exportPng)="exportPng()">
-                    </app-actions-bar>
                 </div>
             </div>
         </div>
