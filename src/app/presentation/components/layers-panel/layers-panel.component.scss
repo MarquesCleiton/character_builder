@@ -70,6 +70,84 @@
 
 .cb-layers__name {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cb-layers__pencil-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--cb-ink-soft);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.12s, background 0.12s;
+}
+
+.cb-layers__item:hover .cb-layers__pencil-btn {
+    opacity: 1;
+}
+
+.cb-layers__pencil-btn:hover {
+    color: var(--cb-accent);
+    background: var(--cb-accent-soft);
+}
+
+.cb-layers__actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.cb-layers__action-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--cb-ink-soft);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    transition: background 0.12s, color 0.12s;
+}
+
+.cb-layers__action-btn:hover {
+    background: var(--cb-surface-soft);
+    color: var(--cb-ink);
+}
+
+.cb-layers__action-btn--lock.active {
+    color: var(--cb-accent);
+}
+
+.cb-layers__action-btn--remove:hover {
+    background: rgba(192, 57, 43, 0.1);
+    color: #c0392b;
+}
+
+.cb-layers__name-input {
+    flex: 1;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--cb-ink);
+    background: var(--cb-surface-soft);
+    border: 1px solid var(--cb-accent);
+    border-radius: 6px;
+    padding: 2px 8px;
+    outline: none;
+    min-width: 0;
+    font-family: inherit;
 }
 
 .cb-layers__drag {

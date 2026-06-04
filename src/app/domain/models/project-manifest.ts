@@ -1,25 +1,18 @@
-import { AssetCategory } from './asset-category';
-import { AssetItem } from './asset-item';
+import { Template } from './template';
 
 export interface ProjectHistoryEntry {
     date: string;
-    snapshot: {
-        selected: Partial<Record<AssetCategory, string>>;
-        locked: Partial<Record<AssetCategory, boolean>>;
-    };
+    activeTemplateId: string;
+    templateSnapshots: Record<string, {
+        selected: Record<string, string>;
+        locked: Record<string, boolean>;
+    }>;
 }
 
 export interface ProjectManifest {
     name: string;
     version: string;
-    canvasWidth: number;
-    canvasHeight: number;
-    layers: AssetCategory[];
-    templateImage?: string;
-    templatePreviewUrl?: string;
-    assets: Record<AssetCategory, AssetItem[]>;
-    selected: Partial<Record<AssetCategory, string>>;
-    locked: Partial<Record<AssetCategory, boolean>>;
-    hidden: Partial<Record<AssetCategory, boolean>>;
+    templates: Template[];
+    activeTemplateId: string;
     history: ProjectHistoryEntry[];
 }

@@ -4,74 +4,112 @@
 </app-topbar>
 
 <ng-container *ngIf="manifest$ | async as manifest">
-    <div class="cb-editor">
-        <!-- Coluna esquerda: prévia + camadas + exportar -->
-        <div class="cb-editor__left">
-            <app-preview-canvas [manifest]="manifest"></app-preview-canvas>
-            <div class="cb-preview-actions">
-                <button class="cb-preview-actions__btn" type="button" (click)="copyPng()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    Copiar PNG
-                </button>
-                <button class="cb-preview-actions__btn" type="button" (click)="exportPng()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Salvar PNG
-                </button>
+    <ng-container *ngIf="getActiveTemplate(manifest) as template">
+        <div class="cb-editor">
+            <!-- Coluna esquerda: prévia + camadas -->
+            <div class="cb-editor__left">
+                <app-preview-canvas [manifest]="manifest"></app-preview-canvas>
+                <div class="cb-preview-actions">
+                    <button class="cb-preview-actions__btn" type="button" (click)="copyPng()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copiar PNG
+                    </button>
+                    <button class="cb-preview-actions__btn" type="button" (click)="exportPng()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Salvar PNG
+                    </button>
+                </div>
+
             </div>
-            <app-layers-panel [manifest]="manifest" (reorder)="reorderLayers($event)"
-                (toggleVisibility)="toggleVisibility($event)">
-            </app-layers-panel>
-        </div>
 
-        <!-- Coluna direita: todas as categorias -->
-        <div class="cb-editor__right">
-            <p class="cb-section-title cb-editor__section-label">Personalizar</p>
+            <!-- Coluna direita: template selector + camadas -->
+            <div class="cb-editor__right">
+                <p class="cb-section-title cb-editor__section-label">Personalizar</p>
 
-            <div class="cb-editor__panel-wrap">
-                <div class="cb-editor__panel">
-                    <app-category-browser *ngFor="let cat of categories" [title]="labels[cat]"
-                        [items]="manifest.assets[cat]" [selectedId]="manifest.selected[cat]"
-                        [locked]="manifest.locked[cat] ?? false" (select)="onSelect(cat, $event)"
-                        (prev)="onPrev(cat, manifest.assets[cat], manifest.selected[cat])"
-                        (next)="onNext(cat, manifest.assets[cat], manifest.selected[cat])"
-                        (openGallery)="openGallery(cat)" (toggleLock)="toggleLock(cat)"
-                        (importFile)="onImportFile(cat, $event)" (deleteAsset)="onDeleteAsset(cat, $event)"
-                        (editAsset)="onEditAsset(cat, $event)">
-                    </app-category-browser>
+                <div class="cb-editor__panel-wrap">
+                    <div class="cb-editor__panel">
+                        <!-- Template selector: fixed first element -->
+                        <app-template-selector [templates]="manifest.templates"
+                            [activeTemplateId]="manifest.activeTemplateId" (selectTemplate)="onSelectTemplate($event)"
+                            (addTemplateWithImage)="onAddTemplateWithImage($event)"
+                            (renameTemplate)="onRenameTemplate($event)" (deleteTemplate)="onDeleteTemplate($event)"
+                            (changeTemplateImage)="onChangeTemplateImage($event)">
+                        </app-template-selector>
+
+                        <!-- Empty state: add first layer -->
+                        <button class="cb-panel-add-layer" *ngIf="template.layers.length === 0" type="button"
+                            (click)="addLayerBelow(null)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2.5">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Nova camada
+                        </button>
+
+                        <!-- One CategoryBrowser per layer, topmost first, with drag + move buttons -->
+                        <ng-container *ngFor="let layer of getDisplayLayers(template); let i = index; let last = last">
+                            <div class="cb-panel-layer" draggable="true" (dragstart)="onPanelDragStart(layer)"
+                                (dragover)="onPanelDragOver($event, layer)" (drop)="onPanelDrop($event)"
+                                (dragend)="onPanelDragEnd()">
+                                <app-category-browser [title]="layer.name" [items]="template.assets[layer.id] ?? []"
+                                    [selectedId]="template.selected[layer.id]"
+                                    [locked]="template.locked[layer.id] ?? false" [showLayerControls]="true"
+                                    [canMoveUp]="i > 0" [canMoveDown]="!last" (select)="onSelect(layer.id, $event)"
+                                    (prev)="onPrev(layer.id, template.assets[layer.id] ?? [], template.selected[layer.id])"
+                                    (next)="onNext(layer.id, template.assets[layer.id] ?? [], template.selected[layer.id])"
+                                    (openGallery)="openGallery(layer.id)" (toggleLock)="toggleLock(layer.id)"
+                                    (importFile)="onImportFile(layer.id, $event)"
+                                    (deleteAsset)="onDeleteAsset(layer.id, $event)"
+                                    (editAsset)="onEditAsset(layer.id, $event)" (moveUp)="moveLayerUp(layer.id)"
+                                    (moveDown)="moveLayerDown(layer.id)" (deleteLayer)="removeLayer(layer.id)"
+                                    (renameLayer)="renameLayer({ id: layer.id, name: $event })">
+                                </app-category-browser>
+                            </div>
+                            <!-- Nova camada between / after each layer -->
+                            <button class="cb-panel-add-layer" type="button" (click)="addLayerBelow(layer.id)">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                Nova camada
+                            </button>
+                        </ng-container>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Footer -->
-    <footer class="cb-editor-footer">
-        <div class="cb-editor-footer__path">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span class="cb-muted">Pasta atual:</span>
-            <strong class="cb-editor-footer__folder">{{ workspaceName$ | async }}</strong>
-            <button class="cb-editor-footer__change" type="button" (click)="openWorkspace()">Alterar</button>
-        </div>
-        <span class="cb-muted">Total de assets carregados:
-            <strong>{{ totalAssets$ | async }} itens</strong>
-        </span>
-    </footer>
+        <!-- Footer -->
+        <footer class="cb-editor-footer">
+            <div class="cb-editor-footer__path">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span class="cb-muted">Pasta atual:</span>
+                <strong class="cb-editor-footer__folder">{{ workspaceName$ | async }}</strong>
+                <button class="cb-editor-footer__change" type="button" (click)="openWorkspace()">Alterar</button>
+            </div>
+            <span class="cb-muted">Total de assets:
+                <strong>{{ totalAssets$ | async }} itens</strong>
+            </span>
+        </footer>
 
-    <app-asset-gallery-modal [open]="showGallery" [title]="labels[activeCategory]"
-        [items]="manifest.assets[activeCategory] || []" [selectedId]="manifest.selected[activeCategory]"
-        [allowAdd]="false" (close)="closeGallery()" (select)="onSelect(activeCategory, $event)"
-        (remove)="removeAsset(activeCategory, $event)" (editAsset)="onEditAsset(activeCategory, $event)">
-    </app-asset-gallery-modal>
-
+        <app-asset-gallery-modal [open]="showGallery" [title]="getActiveLayerName(manifest)"
+            [items]="template.assets[activeLayerId] ?? []" [selectedId]="template.selected[activeLayerId]"
+            [allowAdd]="false" (close)="closeGallery()" (select)="onSelect(activeLayerId, $event)"
+            (remove)="removeAsset(activeLayerId, $event)" (editAsset)="onEditAsset(activeLayerId, $event)">
+        </app-asset-gallery-modal>
+    </ng-container>
 </ng-container>

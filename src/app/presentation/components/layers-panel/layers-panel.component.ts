@@ -1,7 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { AssetCategory } from '../../../domain/models/asset-category';
-import { CATEGORY_LABELS } from '../../../shared/constants/layer.constants';
-import { ProjectManifest } from '../../../domain/models/project-manifest';
+import { Layer } from '../../../domain/models/layer';
+import { Template } from '../../../domain/models/template';
 
 @Component({
     selector: 'app-layers-panel',
@@ -9,60 +8,103 @@ import { ProjectManifest } from '../../../domain/models/project-manifest';
     styleUrls: ['./layers-panel.component.scss']
 })
 export class LayersPanelComponent {
-    @Input() manifest?: ProjectManifest;
-    @Output() reorder = new EventEmitter<AssetCategory[]>();
-    @Output() toggleVisibility = new EventEmitter<AssetCategory>();
+    @Input() template?: Template;
 
-    readonly labels = CATEGORY_LABELS;
+    @Output() reorder = new EventEmitter<Layer[]>();
+    @Output() toggleVisibility = new EventEmitter<string>();
+    @Output() toggleLock = new EventEmitter<string>();
+    @Output() renameLayer = new EventEmitter<{ id: string; name: string }>();
+    @Output() removeLayer = new EventEmitter<string>();
+    @Output() addLayerAbove = new EventEmitter<string>();
+    @Output() addLayerBelow = new EventEmitter<string | null>();
 
-    private draggedCategory: AssetCategory | null = null;
+    private draggedLayer: Layer | null = null;
+    editingLayerId: string | null = null;
+    editingName = '';
 
-    get order(): AssetCategory[] {
-        return this.manifest?.layers ?? [];
+    /** Visual order: top of list = topmost layer (rendered last), so we reverse render order */
+    get displayLayers(): Layer[] {
+        return this.template ? [...this.template.layers].reverse() : [];
     }
 
-    /** Visual order: top of list = topmost layer (rendered last) */
-    get displayOrder(): AssetCategory[] {
-        return [...this.order].reverse();
+    isHidden(layerId: string): boolean {
+        return this.template?.hidden?.[layerId] ?? false;
     }
 
-    isHidden(category: AssetCategory): boolean {
-        return this.manifest?.hidden?.[category] ?? false;
+    isLocked(layerId: string): boolean {
+        return this.template?.locked?.[layerId] ?? false;
     }
 
-    onDragStart(category: AssetCategory): void {
-        this.draggedCategory = category;
+    getSelectedName(layerId: string): string {
+        if (!this.template) return '-';
+        const selectedId = this.template.selected[layerId];
+        const asset = (this.template.assets[layerId] ?? []).find(a => a.id === selectedId);
+        return asset?.name ?? 'Sem seleção';
     }
 
-    onDragOver(event: DragEvent, target: AssetCategory): void {
+    startEdit(layer: Layer): void {
+        this.editingLayerId = layer.id;
+        this.editingName = layer.name;
+    }
+
+    commitEdit(layerId: string): void {
+        const name = this.editingName.trim();
+        if (name) this.renameLayer.emit({ id: layerId, name });
+        this.editingLayerId = null;
+        this.editingName = '';
+    }
+
+    cancelEdit(): void {
+        this.editingLayerId = null;
+        this.editingName = '';
+    }
+
+    onDragStart(layer: Layer): void {
+        this.draggedLayer = layer;
+    }
+
+    onDragOver(event: DragEvent, target: Layer): void {
         event.preventDefault();
-        if (!this.draggedCategory || this.draggedCategory === target) return;
-        const display = [...this.displayOrder];
-        const fromIdx = display.indexOf(this.draggedCategory);
-        const toIdx = display.indexOf(target);
+        if (!this.draggedLayer || this.draggedLayer.id === target.id) return;
+        const display = [...this.displayLayers];
+        const fromIdx = display.findIndex(l => l.id === this.draggedLayer!.id);
+        const toIdx = display.findIndex(l => l.id === target.id);
         if (fromIdx < 0 || toIdx < 0) return;
         display.splice(fromIdx, 1);
-        display.splice(toIdx, 0, this.draggedCategory);
+        display.splice(toIdx, 0, this.draggedLayer);
         this.reorder.emit([...display].reverse());
     }
 
     onDrop(event: DragEvent): void {
         event.preventDefault();
-        this.draggedCategory = null;
+        this.draggedLayer = null;
     }
 
     onDragEnd(): void {
-        this.draggedCategory = null;
+        this.draggedLayer = null;
     }
 
-    onToggleVisibility(category: AssetCategory): void {
-        this.toggleVisibility.emit(category);
+    onToggleVisibility(layerId: string): void {
+        this.toggleVisibility.emit(layerId);
     }
 
-    getSelectedLabel(category: AssetCategory): string {
-        if (!this.manifest) return '-';
-        const selectedId = this.manifest.selected[category];
-        const asset = this.manifest.assets[category].find(item => item.id === selectedId);
-        return asset?.name ?? 'Sem selecao';
+    onToggleLock(layerId: string): void {
+        this.toggleLock.emit(layerId);
+    }
+
+    onAddLayerAbove(layerId: string): void {
+        this.addLayerAbove.emit(layerId);
+    }
+
+    onAddLayerBelow(layerId: string): void {
+        this.addLayerBelow.emit(layerId);
+    }
+
+    onAddLayerAtEnd(): void {
+        this.addLayerBelow.emit(null);
+    }
+
+    onRemoveLayer(layerId: string): void {
+        this.removeLayer.emit(layerId);
     }
 }

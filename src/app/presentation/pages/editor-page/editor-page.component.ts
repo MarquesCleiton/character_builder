@@ -1,15 +1,15 @@
-import { Component } from '@angular/core';
+﻿import { Component } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Router } from '@angular/router';
-import { AssetCategory } from '../../../domain/models/asset-category';
 import { AssetItem } from '../../../domain/models/asset-item';
+import { Layer } from '../../../domain/models/layer';
 import { ProjectManifest } from '../../../domain/models/project-manifest';
+import { Template } from '../../../domain/models/template';
 import { ExportService } from '../../../infrastructure/services/export.service';
 import { AssetImportStateService } from '../../../infrastructure/services/asset-import-state.service';
 import { WorkspaceFilesService } from '../../../infrastructure/services/workspace-files.service';
 import { WorkspaceStore } from '../../../infrastructure/state/workspace.store';
-import { CATEGORY_LABELS, DISPLAY_ORDER } from '../../../shared/constants/layer.constants';
 
 @Component({
     selector: 'app-editor-page',
@@ -20,13 +20,15 @@ export class EditorPageComponent {
     readonly manifest$: Observable<ProjectManifest> = this.store.manifest$;
     readonly workspaceName$: Observable<string> = this.store.workspaceName$;
     readonly totalAssets$: Observable<number> = this.store.manifest$.pipe(
-        map(m => Object.values(m.assets).reduce((sum, arr) => sum + arr.length, 0))
+        map(m => {
+            const tpl = m.templates.find(t => t.id === m.activeTemplateId) ?? m.templates[0];
+            return tpl ? Object.values(tpl.assets).reduce((sum, arr) => sum + arr.length, 0) : 0;
+        })
     );
-    readonly categories = DISPLAY_ORDER;
-    readonly labels = CATEGORY_LABELS;
-    activeCategory: AssetCategory = AssetCategory.Eyes;
-    panelCategory: AssetCategory = this.categories[0];
+
     showGallery = false;
+    activeLayerId = '';
+    private panelDragLayer: Layer | null = null;
 
     constructor(
         private readonly store: WorkspaceStore,
@@ -36,39 +38,86 @@ export class EditorPageComponent {
         private readonly importState: AssetImportStateService
     ) { }
 
-    setActive(category: AssetCategory): void {
-        this.activeCategory = category;
+    getActiveTemplate(manifest: ProjectManifest): Template | undefined {
+        return manifest.templates.find(t => t.id === manifest.activeTemplateId) ?? manifest.templates[0];
     }
 
-    setPanelCategory(category: AssetCategory): void {
-        this.panelCategory = category;
+    /** Display order: reversed (top = highest z-index) */
+    getDisplayLayers(template: Template): Layer[] {
+        return [...template.layers].reverse();
     }
 
-    onSelect(category: AssetCategory, id: string): void {
-        this.activeCategory = category;
-        this.store.selectAsset(category, id);
+    moveLayerUp(layerId: string): void { this.store.moveLayerUp(layerId); }
+    moveLayerDown(layerId: string): void { this.store.moveLayerDown(layerId); }
+
+    onPanelDragStart(layer: Layer): void { this.panelDragLayer = layer; }
+
+    onPanelDragOver(event: DragEvent, target: Layer): void {
+        event.preventDefault();
+        if (!this.panelDragLayer || this.panelDragLayer.id === target.id) return;
+        const tpl = this.store.activeTemplate;
+        if (!tpl) return;
+        const display = [...tpl.layers].reverse();
+        const fromIdx = display.findIndex(l => l.id === this.panelDragLayer!.id);
+        const toIdx = display.findIndex(l => l.id === target.id);
+        if (fromIdx < 0 || toIdx < 0) return;
+        display.splice(fromIdx, 1);
+        display.splice(toIdx, 0, this.panelDragLayer);
+        this.store.reorderLayers([...display].reverse());
     }
 
-    onPrev(category: AssetCategory, items: AssetItem[], selectedId?: string): void {
-        if (items.length === 0) {
-            return;
-        }
-        const index = Math.max(0, items.findIndex(item => item.id === selectedId));
-        const nextIndex = (index - 1 + items.length) % items.length;
-        this.store.selectAsset(category, items[nextIndex].id);
+    onPanelDrop(event: DragEvent): void { event.preventDefault(); this.panelDragLayer = null; }
+    onPanelDragEnd(): void { this.panelDragLayer = null; }
+
+    async onAddTemplateWithImage(file: File): Promise<void> {
+        const rawName = window.prompt('Nome do novo template:');
+        if (rawName === null) return;
+        const name = rawName.trim() || `Template ${this.store.snapshot.templates.length + 1}`;
+        this.store.addTemplate(name);
+        await this.store.updateTemplateImage(this.store.activeTemplate.id, file);
     }
 
-    onNext(category: AssetCategory, items: AssetItem[], selectedId?: string): void {
-        if (items.length === 0) {
-            return;
-        }
-        const index = Math.max(0, items.findIndex(item => item.id === selectedId));
-        const nextIndex = (index + 1) % items.length;
-        this.store.selectAsset(category, items[nextIndex].id);
+    onSelectTemplate(templateId: string): void {
+        this.store.selectTemplate(templateId);
     }
 
-    openGallery(category: AssetCategory): void {
-        this.activeCategory = category;
+    onAddTemplate(): void {
+        this.store.addTemplate();
+    }
+
+    onRenameTemplate(event: { id: string; name: string }): void {
+        this.store.renameTemplate(event.id, event.name);
+    }
+
+    onDeleteTemplate(id: string): void {
+        const name = this.store.snapshot.templates.find(t => t.id === id)?.name ?? 'este template';
+        if (!window.confirm(`Deseja apagar "${name}" e todos os seus elementos? Esta ação não pode ser desfeita.`)) return;
+        this.store.removeTemplate(id);
+    }
+
+    async onChangeTemplateImage(event: { id: string; file: File }): Promise<void> {
+        await this.store.updateTemplateImage(event.id, event.file);
+    }
+
+    onSelect(layerId: string, id: string): void {
+        this.activeLayerId = layerId;
+        this.store.selectAsset(layerId, id);
+    }
+
+    onPrev(layerId: string, items: AssetItem[], selectedId?: string): void {
+        if (!items.length) return;
+        const idx = Math.max(0, items.findIndex(item => item.id === selectedId));
+        this.store.selectAsset(layerId, items[(idx - 1 + items.length) % items.length].id);
+    }
+
+    onNext(layerId: string, items: AssetItem[], selectedId?: string): void {
+        if (!items.length) return;
+        const idx = Math.max(0, items.findIndex(item => item.id === selectedId));
+        this.store.selectAsset(layerId, items[(idx + 1) % items.length].id);
+    }
+
+    openGallery(layerId: string): void {
+        this.activeLayerId = layerId;
         this.showGallery = true;
     }
 
@@ -76,43 +125,61 @@ export class EditorPageComponent {
         this.showGallery = false;
     }
 
-    toggleLock(category: AssetCategory): void {
-        this.store.toggleLock(category);
+    toggleLock(layerId: string): void {
+        this.store.toggleLock(layerId);
     }
 
-    toggleVisibility(category: AssetCategory): void {
-        this.store.toggleVisibility(category);
+    toggleVisibility(layerId: string): void {
+        this.store.toggleVisibility(layerId);
     }
 
-    reorderLayers(newOrder: AssetCategory[]): void {
+    reorderLayers(newOrder: Layer[]): void {
         this.store.reorderLayers(newOrder);
     }
 
-    onImportFile(category: AssetCategory, file: File): void {
+    addLayerAbove(layerId: string): void {
+        this.store.addLayer(layerId, 'above');
+    }
+
+    addLayerBelow(layerId: string | null): void {
+        this.store.addLayer(layerId, 'below');
+    }
+
+    renameLayer(event: { id: string; name: string }): void {
+        this.store.renameLayer(event.id, event.name);
+    }
+
+    removeLayer(layerId: string): void {
+        if (!window.confirm('Deseja remover esta camada e todos os seus elementos?')) return;
+        this.store.removeLayer(layerId);
+    }
+
+    onImportFile(layerId: string, file: File): void {
         this.importState.pendingBlob = file;
-        this.importState.pendingCategory = category;
+        this.importState.pendingLayerId = layerId;
         this.importState.pendingName = file.name.replace(/\.[^.]+$/, '');
         this.router.navigate(['/ajustar-elemento']);
     }
 
-    async onEditAsset(category: AssetCategory, id: string): Promise<void> {
-        const asset = this.store.snapshot.assets[category].find(a => a.id === id);
+    async onEditAsset(layerId: string, id: string): Promise<void> {
+        const tpl = this.store.activeTemplate;
+        const asset = (tpl?.assets[layerId] ?? []).find(a => a.id === id);
         if (!asset?.previewUrl) return;
         const blob = await fetch(asset.previewUrl).then(r => r.blob());
         this.importState.pendingBlob = blob;
-        this.importState.pendingCategory = category;
+        this.importState.pendingLayerId = layerId;
         this.importState.pendingName = asset.name;
         this.importState.editingId = id;
         this.router.navigate(['/ajustar-elemento']);
     }
 
-    onDeleteAsset(category: AssetCategory, id: string): void {
-        if (!window.confirm('Deseja realmente excluir este elemento? Esta ação não pode ser desfeita.')) return;
-        this.store.removeAsset(category, id);
+    onDeleteAsset(layerId: string, id: string): void {
+        if (!window.confirm('Deseja realmente excluir este elemento? Esta aÃ§Ã£o nÃ£o pode ser desfeita.')) return;
+        this.store.removeAsset(layerId, id);
     }
 
-    removeAsset(category: AssetCategory, id: string): void {
-        this.store.removeAsset(category, id);
+    removeAsset(layerId: string, id: string): void {
+        this.store.removeAsset(layerId, id);
     }
 
     randomize(): void {
@@ -125,7 +192,7 @@ export class EditorPageComponent {
 
         if ('showSaveFilePicker' in window) {
             try {
-                const handle = await (window as any).showSaveFilePicker({
+                const handle = await (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
                     suggestedName,
                     types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }]
                 });
@@ -135,7 +202,6 @@ export class EditorPageComponent {
                 return;
             } catch (e) {
                 if ((e as Error).name === 'AbortError') return;
-                // Fall through to legacy download on other errors
             }
         }
 
@@ -162,30 +228,15 @@ export class EditorPageComponent {
         }
     }
 
-    goToImport(): void {
-        this.router.navigate(['/ajustar-elemento']);
-    }
-
     async openWorkspace(): Promise<void> {
         const selection = await this.files.selectWorkspace();
-        if (!selection) {
-            return;
-        }
+        if (!selection) return;
         if (!selection.project) {
             window.alert('Manifesto nao encontrado. Volte para criar um novo projeto.');
             this.router.navigate(['/boas-vindas']);
             return;
         }
         this.store.loadWorkspace(selection.handle, selection.project);
-    }
-
-    async updateTemplate(event: Event): Promise<void> {
-        const input = event.target as HTMLInputElement;
-        if (!input.files || input.files.length === 0) {
-            return;
-        }
-        await this.store.updateTemplate(input.files[0]);
-        input.value = '';
     }
 
     onRenameProject(name: string): void {
@@ -196,4 +247,12 @@ export class EditorPageComponent {
         await this.store.updateTemplate(file);
     }
 
+    goToImport(): void {
+        this.router.navigate(['/ajustar-elemento']);
+    }
+
+    getActiveLayerName(manifest: ProjectManifest): string {
+        const tpl = this.getActiveTemplate(manifest);
+        return tpl?.layers.find(l => l.id === this.activeLayerId)?.name ?? '';
+    }
 }

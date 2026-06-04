@@ -5,8 +5,8 @@
     </div>
     <div class="cb-preview__viewport" #viewport (mousedown)="startPan($event)" (mousemove)="movePan($event)"
         (mouseup)="stopPan()" (mouseleave)="stopPan()">
-        <img *ngIf="showTemplate && manifest?.templatePreviewUrl" class="cb-preview__template"
-            [src]="manifest?.templatePreviewUrl" [style.opacity]="templateOpacity" [style.transform]="transformStyle"
+        <img *ngIf="showTemplate && activeTemplatePreviewUrl" class="cb-preview__template"
+            [src]="activeTemplatePreviewUrl" [style.opacity]="templateOpacity" [style.transform]="transformStyle"
             [style.width.px]="canvasWidth" [style.height.px]="canvasHeight" alt="template" />
         <canvas #canvas class="cb-preview__canvas" [style.transform]="transformStyle"></canvas>
     </div>

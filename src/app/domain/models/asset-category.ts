@@ -1,6 +1,1 @@
-export enum AssetCategory {
-    Legs = 'pernas',
-    Torso = 'torso',
-    Mouth = 'boca',
-    Eyes = 'olhos'
-}
+// AssetCategory removed — layers are now dynamic per template (see Layer and Template models)

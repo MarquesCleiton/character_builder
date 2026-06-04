@@ -1,10 +1,9 @@
-import { AssetCategory } from './asset-category';
 import { AssetTransform } from './asset-transform';
 
 export interface AssetItem {
     id: string;
     name: string;
-    category: AssetCategory;
+    layerId: string;
     filePath: string;
     transform: AssetTransform;
     createdAt: string;

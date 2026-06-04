@@ -16,6 +16,7 @@ import { LayersPanelComponent } from './presentation/components/layers-panel/lay
 import { ProjectNameModalComponent } from './presentation/components/project-name-modal/project-name-modal.component';
 import { AssetGalleryModalComponent } from './presentation/components/asset-gallery-modal/asset-gallery-modal.component';
 import { AssetPositionEditorComponent } from './presentation/components/asset-position-editor/asset-position-editor.component';
+import { TemplateSelectorComponent } from './presentation/components/template-selector/template-selector.component';
 
 @NgModule({
   declarations: [
@@ -30,7 +31,8 @@ import { AssetPositionEditorComponent } from './presentation/components/asset-po
     LayersPanelComponent,
     ProjectNameModalComponent,
     AssetGalleryModalComponent,
-    AssetPositionEditorComponent
+    AssetPositionEditorComponent,
+    TemplateSelectorComponent
   ],
   imports: [
     BrowserModule,

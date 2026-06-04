@@ -11,6 +11,9 @@ export class CategoryBrowserComponent {
     @Input() items: AssetItem[] = [];
     @Input() selectedId?: string;
     @Input() locked = false;
+    @Input() showLayerControls = false;
+    @Input() canMoveUp = true;
+    @Input() canMoveDown = true;
 
     @Output() select = new EventEmitter<string>();
     @Output() prev = new EventEmitter<void>();
@@ -20,6 +23,30 @@ export class CategoryBrowserComponent {
     @Output() importFile = new EventEmitter<File>();
     @Output() deleteAsset = new EventEmitter<string>();
     @Output() editAsset = new EventEmitter<string>();
+    @Output() moveUp = new EventEmitter<void>();
+    @Output() moveDown = new EventEmitter<void>();
+    @Output() deleteLayer = new EventEmitter<void>();
+    @Output() renameLayer = new EventEmitter<string>();
+
+    isEditingTitle = false;
+    editingName = '';
+
+    startEdit(): void {
+        this.editingName = this.title;
+        this.isEditingTitle = true;
+    }
+
+    commitEdit(): void {
+        const name = this.editingName.trim();
+        if (name) this.renameLayer.emit(name);
+        this.isEditingTitle = false;
+        this.editingName = '';
+    }
+
+    cancelEdit(): void {
+        this.isEditingTitle = false;
+        this.editingName = '';
+    }
 
     onFileChange(event: Event): void {
         const input = event.target as HTMLInputElement;

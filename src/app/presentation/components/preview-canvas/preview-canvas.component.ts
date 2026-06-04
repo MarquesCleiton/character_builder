@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { ImageLoaderService } from '../../../infrastructure/services/image-loader.service';
-import { LAYER_ORDER } from '../../../shared/constants/layer.constants';
 import { ProjectManifest } from '../../../domain/models/project-manifest';
+import { Template } from '../../../domain/models/template';
 import { EXPORT_HEIGHT, EXPORT_WIDTH } from '../../../shared/constants/export.constants';
 
 @Component({
@@ -27,8 +27,14 @@ export class PreviewCanvasComponent implements AfterViewInit, OnChanges, OnDestr
     templateOpacity = 0.5;
     showTemplate = true;
 
-    get canvasWidth(): number { return this.manifest?.canvasWidth || EXPORT_WIDTH; }
-    get canvasHeight(): number { return this.manifest?.canvasHeight || EXPORT_HEIGHT; }
+    private get activeTemplate(): Template | undefined {
+        if (!this.manifest) return undefined;
+        return this.manifest.templates.find(t => t.id === this.manifest!.activeTemplateId) ?? this.manifest.templates[0];
+    }
+
+    get canvasWidth(): number { return this.activeTemplate?.canvasWidth ?? EXPORT_WIDTH; }
+    get canvasHeight(): number { return this.activeTemplate?.canvasHeight ?? EXPORT_HEIGHT; }
+    get activeTemplatePreviewUrl(): string | undefined { return this.activeTemplate?.previewUrl; }
 
     get aspectRatioLabel(): string {
         const w = this.canvasWidth;
@@ -59,7 +65,9 @@ export class PreviewCanvasComponent implements AfterViewInit, OnChanges, OnDestr
         if (changes['manifest']) {
             const prev = changes['manifest'].previousValue as ProjectManifest | undefined;
             const curr = changes['manifest'].currentValue as ProjectManifest | undefined;
-            if (this.isReady && (prev?.canvasWidth !== curr?.canvasWidth || prev?.canvasHeight !== curr?.canvasHeight)) {
+            const prevTpl = prev?.templates.find(t => t.id === prev.activeTemplateId) ?? prev?.templates[0];
+            const currTpl = curr?.templates.find(t => t.id === curr.activeTemplateId) ?? curr?.templates[0];
+            if (this.isReady && (prevTpl?.canvasWidth !== currTpl?.canvasWidth || prevTpl?.canvasHeight !== currTpl?.canvasHeight)) {
                 const canvas = this.canvasRef.nativeElement;
                 canvas.width = this.canvasWidth;
                 canvas.height = this.canvasHeight;
@@ -147,24 +155,23 @@ export class PreviewCanvasComponent implements AfterViewInit, OnChanges, OnDestr
 
     private async draw(): Promise<void> {
         if (!this.isReady || !this.manifest) return;
+        const template = this.activeTemplate;
+        if (!template) return;
 
         const canvas = this.canvasRef.nativeElement;
-        canvas.width = this.manifest.canvasWidth || EXPORT_WIDTH;
-        canvas.height = this.manifest.canvasHeight || EXPORT_HEIGHT;
+        canvas.width = template.canvasWidth || EXPORT_WIDTH;
+        canvas.height = template.canvasHeight || EXPORT_HEIGHT;
         const context = canvas.getContext('2d');
         if (!context) return;
 
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        const layers = this.manifest.layers?.length ? this.manifest.layers : LAYER_ORDER;
-        for (const category of layers) {
-            if (this.manifest.hidden?.[category]) continue;
-            const selectedId = this.manifest.selected[category];
-            const asset = this.manifest.assets[category].find(item => item.id === selectedId);
-            if (!asset) continue;
-            const source = asset.previewUrl || '';
-            if (!source) continue;
-            const image = await this.loader.load(source);
+        for (const layer of template.layers) {
+            if (template.hidden?.[layer.id]) continue;
+            const selectedId = template.selected[layer.id];
+            const asset = (template.assets[layer.id] ?? []).find(item => item.id === selectedId);
+            if (!asset?.previewUrl) continue;
+            const image = await this.loader.load(asset.previewUrl);
             context.save();
             context.translate(asset.transform.x, asset.transform.y);
             context.rotate((asset.transform.rotation * Math.PI) / 180);

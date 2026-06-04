@@ -1,25 +1,31 @@
 <div class="cb-card cb-layers">
     <div class="cb-layers__header">
         <span class="cb-section-title">Camadas</span>
-        <span class="cb-muted cb-layers__hint">arraste para reordenar</span>
+        <button class="cb-layers__add-btn" type="button" title="Adicionar camada" (click)="onAddLayerAtEnd()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Nova camada
+        </button>
     </div>
-    <div class="cb-layers__list" *ngIf="manifest">
-        <div class="cb-layers__item" *ngFor="let category of displayOrder" draggable="true"
-            [class.is-hidden]="isHidden(category)" (dragstart)="onDragStart(category)"
-            (dragover)="onDragOver($event, category)" (drop)="onDrop($event)" (dragend)="onDragEnd()">
+    <div class="cb-layers__list" *ngIf="template">
+        <div class="cb-layers__item" *ngFor="let layer of displayLayers" draggable="true"
+            [class.is-hidden]="isHidden(layer.id)" [class.is-locked]="isLocked(layer.id)"
+            (dragstart)="onDragStart(layer)" (dragover)="onDragOver($event, layer)" (drop)="onDrop($event)"
+            (dragend)="onDragEnd()">
 
             <button class="cb-layers__eye-btn" type="button"
-                [title]="isHidden(category) ? 'Mostrar camada' : 'Ocultar camada'"
-                (click)="onToggleVisibility(category)">
-                <!-- eye open -->
-                <svg *ngIf="!isHidden(category)" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                [title]="isHidden(layer.id) ? 'Mostrar camada' : 'Ocultar camada'"
+                (click)="onToggleVisibility(layer.id)">
+                <svg *ngIf="!isHidden(layer.id)" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                     <circle cx="12" cy="12" r="3"></circle>
                 </svg>
-                <!-- eye closed -->
-                <svg *ngIf="isHidden(category)" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                <svg *ngIf="isHidden(layer.id)" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
@@ -28,17 +34,71 @@
                 </svg>
             </button>
 
-            <span class="cb-layers__name">{{ labels[category] }}</span>
+            <ng-container *ngIf="editingLayerId !== layer.id; else editTpl">
+                <span class="cb-layers__name" (dblclick)="startEdit(layer)">{{ layer.name }}</span>
+                <button class="cb-layers__pencil-btn" type="button" title="Renomear camada" (click)="startEdit(layer)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                </button>
+            </ng-container>
+            <ng-template #editTpl>
+                <input class="cb-layers__name-input" type="text" [(ngModel)]="editingName" (blur)="commitEdit(layer.id)"
+                    (keyup.enter)="commitEdit(layer.id)" (keyup.escape)="cancelEdit()" autofocus />
+            </ng-template>
 
-            <svg class="cb-layers__drag" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="8" y1="6" x2="21" y2="6"></line>
-                <line x1="8" y1="12" x2="21" y2="12"></line>
-                <line x1="8" y1="18" x2="21" y2="18"></line>
-                <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                <line x1="3" y1="18" x2="3.01" y2="18"></line>
-            </svg>
+            <div class="cb-layers__actions">
+                <button class="cb-layers__action-btn" type="button" title="Adicionar acima"
+                    (click)="onAddLayerAbove(layer.id)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="17 11 12 6 7 11"></polyline>
+                        <line x1="12" y1="6" x2="12" y2="18"></line>
+                    </svg>
+                </button>
+                <button class="cb-layers__action-btn" type="button" title="Adicionar abaixo"
+                    (click)="onAddLayerBelow(layer.id)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="7 13 12 18 17 13"></polyline>
+                        <line x1="12" y1="6" x2="12" y2="18"></line>
+                    </svg>
+                </button>
+                <button class="cb-layers__action-btn cb-layers__action-btn--lock" type="button"
+                    [class.active]="isLocked(layer.id)" [title]="isLocked(layer.id) ? 'Desbloquear' : 'Bloquear'"
+                    (click)="onToggleLock(layer.id)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                </button>
+                <button class="cb-layers__action-btn cb-layers__action-btn--remove" type="button" title="Remover camada"
+                    (click)="onRemoveLayer(layer.id)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6l-1 14H6L5 6"></path>
+                        <path d="M10 11v6"></path>
+                        <path d="M14 11v6"></path>
+                        <path d="M9 6V4h6v2"></path>
+                    </svg>
+                </button>
+                <svg class="cb-layers__drag" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+            </div>
         </div>
     </div>
+    <p class="cb-layers__empty cb-muted" *ngIf="template && displayLayers.length === 0">Nenhuma camada. Clique em "Nova
+        camada" para começar.</p>
 </div>

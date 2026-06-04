@@ -1,12 +1,10 @@
 import { AfterViewInit, Component, ElementRef, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { AssetCategory } from '../../../domain/models/asset-category';
 import { AssetTransform } from '../../../domain/models/asset-transform';
 import { AssetImportStateService } from '../../../infrastructure/services/asset-import-state.service';
 import { ImageLoaderService } from '../../../infrastructure/services/image-loader.service';
 import { WorkspaceStore } from '../../../infrastructure/state/workspace.store';
 import { EXPORT_HEIGHT, EXPORT_WIDTH } from '../../../shared/constants/export.constants';
-import { CATEGORY_LABELS } from '../../../shared/constants/layer.constants';
 
 @Component({
     selector: 'app-ajustar-elemento-page',
@@ -14,11 +12,10 @@ import { CATEGORY_LABELS } from '../../../shared/constants/layer.constants';
     styleUrls: ['./ajustar-elemento-page.component.scss']
 })
 export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDestroy {
-    readonly labels = CATEGORY_LABELS;
-
     @ViewChild('adjustCanvas') canvasRef?: ElementRef<HTMLCanvasElement>;
 
-    category: AssetCategory = AssetCategory.Eyes;
+    layerId = '';
+    layerName = '';
     assetName = '';
 
     elementImage: HTMLImageElement | null = null;
@@ -52,27 +49,28 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         private readonly importState: AssetImportStateService
     ) { }
 
-    private get canvasW(): number { return this.store.snapshot.canvasWidth || EXPORT_WIDTH; }
-    private get canvasH(): number { return this.store.snapshot.canvasHeight || EXPORT_HEIGHT; }
+    private get canvasW(): number { return this.store.activeTemplate?.canvasWidth ?? EXPORT_WIDTH; }
+    private get canvasH(): number { return this.store.activeTemplate?.canvasHeight ?? EXPORT_HEIGHT; }
 
     ngOnInit(): void {
         if (!this.importState.pendingBlob) {
             this.router.navigate(['/editor']);
             return;
         }
-        this.category = this.importState.pendingCategory ?? AssetCategory.Eyes;
+        this.layerId = this.importState.pendingLayerId ?? '';
+        const tpl = this.store.activeTemplate;
+        this.layerName = tpl?.layers.find(l => l.id === this.layerId)?.name ?? this.layerId;
         this.assetName = this.importState.pendingName;
         this.elementUrl = URL.createObjectURL(this.importState.pendingBlob);
 
         const editingId = this.importState.editingId;
         if (editingId) {
-            const existing = this.store.snapshot.assets[this.category]?.find(a => a.id === editingId);
+            const existing = (tpl?.assets[this.layerId] ?? []).find(a => a.id === editingId);
             if (existing?.transform) {
                 const t = existing.transform;
                 this.pos = { x: t.x, y: t.y };
                 this.scale = t.scale;
                 this.rotation = t.rotation;
-                // opacity is kept at 1 (preview-only); user can adjust for positioning
             } else {
                 this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
             }
@@ -86,7 +84,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
         this.elementImage = await this.loader.load(this.elementUrl);
 
-        const templateUrl = this.store.snapshot.templatePreviewUrl;
+        const templateUrl = this.store.activeTemplate?.previewUrl;
         if (templateUrl) {
             try { this.templateImage = await this.loader.load(templateUrl); } catch { /* no template */ }
         }
@@ -442,7 +440,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         const editingId = this.importState.editingId;
         if (editingId) {
             await this.store.updateAssetFromBlob(
-                this.category,
+                this.layerId,
                 editingId,
                 this.assetName.trim(),
                 this.importState.pendingBlob,
@@ -450,7 +448,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             );
         } else {
             await this.store.addAssetFromBlob(
-                this.category,
+                this.layerId,
                 this.assetName.trim(),
                 this.importState.pendingBlob,
                 transform
