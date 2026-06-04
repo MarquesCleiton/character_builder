@@ -35,6 +35,7 @@ export class WorkspaceStore {
     constructor(private readonly files: WorkspaceFilesService) { }
 
     get snapshot(): ProjectManifest { return this.manifestSubject.value; }
+    get currentWorkspaceHandle(): FileSystemDirectoryHandle | null { return this.workspaceHandle; }
 
     get activeTemplate(): Template {
         const m = this.snapshot;
@@ -47,6 +48,7 @@ export class WorkspaceStore {
         this.workspaceNameSubject.next(handle.name);
         this.trackManifestUrls(manifest);
         this.manifestSubject.next(manifest);
+        this.files.rememberWorkspace(handle).catch(() => undefined);
     }
 
     selectTemplate(templateId: string): void {

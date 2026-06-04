@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, Inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { WorkspaceStore } from '../../../infrastructure/state/workspace.store';
 import { WorkspaceFilesService } from '../../../infrastructure/services/workspace-files.service';
@@ -9,7 +9,7 @@ import { NewProjectConfig } from '../../components/project-name-modal/project-na
     templateUrl: './welcome-page.component.html',
     styleUrls: ['./welcome-page.component.scss']
 })
-export class WelcomePageComponent {
+export class WelcomePageComponent implements OnInit {
     showModal = false;
     projectName = '';
     private pendingHandle: FileSystemDirectoryHandle | null = null;
@@ -19,6 +19,13 @@ export class WelcomePageComponent {
         private readonly router: Router,
         @Inject(WorkspaceFilesService) private readonly files: WorkspaceFilesService
     ) { }
+
+    async ngOnInit(): Promise<void> {
+        const restored = await this.files.restoreRecentWorkspace();
+        if (!restored?.project) return;
+        this.store.loadWorkspace(restored.handle, restored.project);
+        this.router.navigate(['/editor']);
+    }
 
     cancelNew(): void {
         this.showModal = false;

@@ -69,9 +69,51 @@ export interface WorkspaceSelection {
 const MANIFEST_FILE_NAME = 'manifesto.json';
 const TEMPLATE_FOLDER = 'templat';
 const MAX_HISTORY = 30;
+const RECENT_WORKSPACE_NAME_KEY = 'cb.recentWorkspace.name';
+const RECENT_WORKSPACE_AT_KEY = 'cb.recentWorkspace.at';
+const DB_NAME = 'character-builder';
+const DB_VERSION = 1;
+const HANDLE_STORE = 'workspace-handles';
+const HANDLE_KEY = 'last';
 
 @Injectable({ providedIn: 'root' })
 export class WorkspaceFilesService {
+    async rememberWorkspace(handle: FileSystemDirectoryHandle): Promise<void> {
+        try {
+            localStorage.setItem(RECENT_WORKSPACE_NAME_KEY, handle.name);
+            localStorage.setItem(RECENT_WORKSPACE_AT_KEY, new Date().toISOString());
+            await this.saveHandle(handle);
+        } catch {
+            // Ignore storage failures.
+        }
+    }
+
+    async restoreRecentWorkspace(): Promise<WorkspaceSelection | null> {
+        const handle = await this.loadHandle();
+        if (!handle) return null;
+
+        try {
+            const maybePermHandle = handle as FileSystemDirectoryHandle & {
+                queryPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
+            };
+            if (maybePermHandle.queryPermission) {
+                const permission = await maybePermHandle.queryPermission({ mode: 'readwrite' });
+                if (permission !== 'granted') return null;
+            }
+            const raw = await this.readRawManifest(handle);
+            if (!raw) return null;
+            const manifestFile = this.ensureNewFormat(raw);
+            const project = await this.toProjectManifest(manifestFile, handle);
+            return { handle, manifestFile, project };
+        } catch {
+            return null;
+        }
+    }
+
+    getRecentWorkspaceName(): string {
+        return localStorage.getItem(RECENT_WORKSPACE_NAME_KEY) ?? '';
+    }
+
     async selectWorkspace(): Promise<WorkspaceSelection | null> {
         if (!('showDirectoryPicker' in window)) {
             window.alert('Seu navegador nao suporta selecao de pasta.');
@@ -86,6 +128,18 @@ export class WorkspaceFilesService {
             return { handle, manifestFile, project };
         } catch {
             return null;
+        }
+    }
+
+    async revealWorkspaceFolder(handle: FileSystemDirectoryHandle): Promise<boolean> {
+        if (!('showDirectoryPicker' in window)) return false;
+        try {
+            await (window as unknown as {
+                showDirectoryPicker: (options?: { startIn?: FileSystemHandle }) => Promise<FileSystemDirectoryHandle>
+            }).showDirectoryPicker({ startIn: handle });
+            return true;
+        } catch {
+            return false;
         }
     }
 
@@ -289,6 +343,44 @@ export class WorkspaceFilesService {
             activeTemplateId: manifest.templateAtivo ?? templates[0]?.id ?? '',
             history: this.toHistory(manifest.historico ?? [])
         };
+    }
+
+    private openDb(): Promise<IDBDatabase> {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(HANDLE_STORE)) {
+                    db.createObjectStore(HANDLE_STORE);
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    private async saveHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+        const db = await this.openDb();
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(HANDLE_STORE, 'readwrite');
+            tx.objectStore(HANDLE_STORE).put(handle, HANDLE_KEY);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
+        });
+        db.close();
+    }
+
+    private async loadHandle(): Promise<FileSystemDirectoryHandle | null> {
+        const db = await this.openDb();
+        const handle = await new Promise<FileSystemDirectoryHandle | null>((resolve, reject) => {
+            const tx = db.transaction(HANDLE_STORE, 'readonly');
+            const req = tx.objectStore(HANDLE_STORE).get(HANDLE_KEY);
+            req.onsuccess = () => resolve((req.result as FileSystemDirectoryHandle | undefined) ?? null);
+            req.onerror = () => reject(req.error);
+        });
+        db.close();
+        return handle;
     }
 
     private toManifestFile(project: ProjectManifest): WorkspaceManifestFile {

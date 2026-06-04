@@ -239,6 +239,18 @@ export class EditorPageComponent {
         this.store.loadWorkspace(selection.handle, selection.project);
     }
 
+    async openProjectFolder(): Promise<void> {
+        const handle = this.store.currentWorkspaceHandle;
+        if (!handle) {
+            window.alert('Nenhum projeto aberto no momento.');
+            return;
+        }
+        const shown = await this.files.revealWorkspaceFolder(handle);
+        if (!shown) {
+            window.alert('Nao foi possivel abrir a pasta do projeto.');
+        }
+    }
+
     onRenameProject(name: string): void {
         this.store.renameProject(name);
     }

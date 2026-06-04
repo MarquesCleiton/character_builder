@@ -20,7 +20,7 @@
         <div class="cb-adjust__canvas-wrap">
             <canvas #adjustCanvas class="cb-adjust__canvas" [style.cursor]="canvasCursor"
                 (mousedown)="onCanvasMouseDown($event)" (mousemove)="onCanvasMouseMove($event)"
-                (mouseup)="onCanvasMouseUp()" (mouseleave)="onCanvasMouseUp()">
+                (mouseup)="onCanvasMouseUp($event)" (mouseleave)="onCanvasMouseUp($event)">
             </canvas>
             <div class="cb-adjust__canvas-placeholder" *ngIf="!elementImage">
                 <p class="cb-muted">Carregando...</p>
@@ -28,51 +28,53 @@
         </div>
 
         <div class="cb-adjust__controls cb-card">
-            <div class="cb-section-title">Elemento</div>
 
-            <label class="cb-adjust__field">
-                <span>Nome</span>
-                <input class="cb-adjust__input" type="text" [(ngModel)]="assetName" placeholder="ex: olhos_01" />
-            </label>
-
-            <div class="cb-adjust__divider"></div>
-            <div class="cb-section-title">Posição e Escala</div>
-
-            <label class="cb-adjust__field">
-                <span>Opacidade do elemento <small class="cb-adjust__opacity-note">(somente para
-                        posicionar)</small></span>
-                <div class="cb-adjust__slider-row">
-                    <input type="range" min="0" max="1" step="0.05" [(ngModel)]="opacity" (input)="draw()"
-                        class="cb-adjust__slider" />
-                    <input type="number" min="0" max="100" step="1" [value]="(opacity * 100) | number:'1.0-0'"
-                        (change)="setOpacity($event)" class="cb-adjust__num-input" />
-                </div>
-            </label>
-
-            <label class="cb-adjust__field">
-                <span>Zoom</span>
-                <div class="cb-adjust__slider-row">
-                    <input type="range" min="0.05" max="4" step="0.01" [(ngModel)]="scale" (input)="draw()"
-                        class="cb-adjust__slider" />
-                    <input type="number" min="5" max="400" step="1" [value]="(scale * 100) | number:'1.0-0'"
-                        (change)="setScale($event)" class="cb-adjust__num-input" />
-                </div>
-            </label>
-
-            <label class="cb-adjust__field">
-                <span>Rotação</span>
-                <div class="cb-adjust__slider-row">
-                    <input type="range" min="-180" max="180" step="1" [(ngModel)]="rotation" (input)="draw()"
-                        class="cb-adjust__slider" />
-                    <input type="number" min="-360" max="360" step="1" [value]="rotation | number:'1.0-0'"
-                        (change)="setRotation($event)" class="cb-adjust__num-input" />
-                </div>
-            </label>
-
-            <div class="cb-adjust__divider"></div>
-            <div class="cb-section-title">Recorte</div>
-
+            <!-- ── MODO NORMAL ─────────────────────────────────── -->
             <ng-container *ngIf="!cropMode">
+                <div class="cb-section-title">Elemento</div>
+
+                <label class="cb-adjust__field">
+                    <span>Nome</span>
+                    <input class="cb-adjust__input" type="text" [(ngModel)]="assetName" placeholder="ex: olhos_01" />
+                </label>
+
+                <div class="cb-adjust__divider"></div>
+                <div class="cb-section-title">Posição e Escala</div>
+
+                <label class="cb-adjust__field">
+                    <span>Opacidade do elemento <small class="cb-adjust__opacity-note">(somente para
+                            posicionar)</small></span>
+                    <div class="cb-adjust__slider-row">
+                        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="opacity" (input)="draw()"
+                            class="cb-adjust__slider" />
+                        <input type="number" min="0" max="100" step="1" [value]="(opacity * 100) | number:'1.0-0'"
+                            (change)="setOpacity($event)" class="cb-adjust__num-input" />
+                    </div>
+                </label>
+
+                <label class="cb-adjust__field">
+                    <span>Zoom</span>
+                    <div class="cb-adjust__slider-row">
+                        <input type="range" min="0.05" max="4" step="0.01" [(ngModel)]="scale" (input)="draw()"
+                            class="cb-adjust__slider" />
+                        <input type="number" min="5" max="400" step="1" [value]="(scale * 100) | number:'1.0-0'"
+                            (change)="setScale($event)" class="cb-adjust__num-input" />
+                    </div>
+                </label>
+
+                <label class="cb-adjust__field">
+                    <span>Rotação</span>
+                    <div class="cb-adjust__slider-row">
+                        <input type="range" min="-180" max="180" step="1" [(ngModel)]="rotation" (input)="draw()"
+                            class="cb-adjust__slider" />
+                        <input type="number" min="-360" max="360" step="1" [value]="rotation | number:'1.0-0'"
+                            (change)="setRotation($event)" class="cb-adjust__num-input" />
+                    </div>
+                </label>
+
+                <div class="cb-adjust__divider"></div>
+                <div class="cb-section-title">Recorte</div>
+
                 <button class="cb-adjust__reset-btn cb-adjust__crop-btn" type="button" (click)="enterCropMode()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -83,14 +85,101 @@
                     </svg>
                     Recortar imagem
                 </button>
+
+                <div class="cb-adjust__reset-row">
+                    <button class="cb-adjust__reset-btn" type="button" (click)="center()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+                        </svg>
+                        Centralizar
+                    </button>
+                    <button class="cb-adjust__reset-btn" type="button" (click)="resetTransform()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 2v6h6" />
+                            <path d="M21 12A9 9 0 0 0 6 5.3L3 8" />
+                        </svg>
+                        Resetar
+                    </button>
+                </div>
+
+                <p class="cb-muted cb-adjust__hint">
+                    <strong>&#8226; Arraste</strong> o elemento para mover.<br />
+                    <strong>&#8226; Canto NW</strong> (&#9711;) = rotacionar.<br />
+                    <strong>&#8226; Demais cantos</strong> (&#9633;) = escalar.
+                </p>
+
+                <button class="cb-btn-primary cb-adjust__save" type="button"
+                    [disabled]="!elementImage || !assetName.trim() || isSaving" (click)="save()">
+                    {{ isSaving ? 'Salvando...' : 'Salvar elemento' }}
+                </button>
             </ng-container>
 
+            <!-- ── MODO RECORTE ────────────────────────────────── -->
             <ng-container *ngIf="cropMode">
-                <p class="cb-muted cb-adjust__crop-hint">Arraste na imagem para selecionar a área de recorte.</p>
+                <div class="cb-section-title">Recorte</div>
+
+                <!-- Tipo de recorte -->
+                <div class="cb-crop-type-row">
+                    <button class="cb-crop-type-btn" [class.is-active]="cropType === 'rect'" type="button"
+                        (click)="cropType = 'rect'; resetCropSelection()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        </svg>
+                        Retangular
+                    </button>
+                    <button class="cb-crop-type-btn" [class.is-active]="cropType === 'oval'" type="button"
+                        (click)="cropType = 'oval'; resetCropSelection()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <ellipse cx="12" cy="12" rx="10" ry="7"></ellipse>
+                        </svg>
+                        Oval
+                    </button>
+                    <button class="cb-crop-type-btn" [class.is-active]="cropType === 'freehand'" type="button"
+                        (click)="cropType = 'freehand'; resetCropSelection()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 17c3-3 5-5 8-5s5 2 8-1"></path>
+                            <path d="M3 7c2 2 4 3 6 3"></path>
+                        </svg>
+                        Mão livre
+                    </button>
+                </div>
+
+                <!-- Mover imagem (pan) -->
+                <button class="cb-crop-pan-btn" [class.is-active]="cropPanMode" type="button"
+                    (click)="cropPanMode = !cropPanMode; canvasCursor = cropPanMode ? 'grab' : 'crosshair'">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20">
+                        </path>
+                    </svg>
+                    {{ cropPanMode ? 'Mover ativo — clique para selecionar' : 'Mover imagem' }}
+                </button>
+
+                <!-- Zoom da visualização -->
+                <label class="cb-adjust__field">
+                    <span>Zoom da visualização</span>
+                    <div class="cb-adjust__slider-row">
+                        <input type="range" min="1" max="5" step="0.1" [value]="cropViewZoom"
+                            (input)="setCropViewZoom(+$any($event.target).value)" class="cb-adjust__slider" />
+                        <span class="cb-adjust__val">{{ cropViewZoom | number:'1.0-1' }}×</span>
+                    </div>
+                </label>
+
                 <div class="cb-adjust__reset-row">
                     <button class="cb-btn-primary" type="button"
-                        [disabled]="!cropRect || cropRect.w < 1 || cropRect.h < 1" (click)="applyCrop()">
+                        [disabled]="(cropType !== 'freehand' && (!cropRect || cropRect.w < 2 || cropRect.h < 2)) || (cropType === 'freehand' && freehandPath.length < 3)"
+                        (click)="applyCrop()">
                         Aplicar
+                    </button>
+                    <button class="cb-btn-secondary" type="button" (click)="resetCropSelection()"
+                        title="Limpar seleção">
+                        Limpar
                     </button>
                     <button class="cb-btn-secondary" type="button" (click)="cancelCrop()">
                         Cancelar
@@ -98,49 +187,6 @@
                 </div>
             </ng-container>
 
-            <div class="cb-adjust__divider"></div>
-            <div class="cb-section-title">Template</div>
-
-            <label class="cb-adjust__field">
-                <span>Opacidade do template</span>
-                <div class="cb-adjust__slider-row">
-                    <input type="range" min="0" max="1" step="0.05" [(ngModel)]="templateOpacity" (input)="draw()"
-                        class="cb-adjust__slider" />
-                    <span class="cb-adjust__val">{{ (templateOpacity * 100) | number:'1.0-0' }}%</span>
-                </div>
-            </label>
-
-            <div class="cb-adjust__divider"></div>
-
-            <div class="cb-adjust__reset-row">
-                <button class="cb-adjust__reset-btn" type="button" (click)="center()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-                    </svg>
-                    Centralizar
-                </button>
-                <button class="cb-adjust__reset-btn" type="button" (click)="resetTransform()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 2v6h6" />
-                        <path d="M21 12A9 9 0 0 0 6 5.3L3 8" />
-                    </svg>
-                    Resetar
-                </button>
-            </div>
-
-            <p class="cb-muted cb-adjust__hint">
-                <strong>&#8226; Arraste</strong> o elemento para mover.<br />
-                <strong>&#8226; Canto NW</strong> (&#9711;) = rotacionar.<br />
-                <strong>&#8226; Demais cantos</strong> (&#9633;) = escalar.
-            </p>
-
-            <button class="cb-btn-primary cb-adjust__save" type="button"
-                [disabled]="!elementImage || !assetName.trim() || isSaving" (click)="save()">
-                {{ isSaving ? 'Salvando...' : 'Salvar elemento' }}
-            </button>
         </div>
     </div>
 </div>

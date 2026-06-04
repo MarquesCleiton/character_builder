@@ -1,5 +1,6 @@
-<app-topbar [projectName]="(manifest$ | async)?.name ?? 'Novo Projeto'" (openProject)="openWorkspace()"
-    (randomize)="randomize()" (exportPng)="exportPng()" (help)="goToImport()" (renameProject)="onRenameProject($event)"
+<app-topbar [projectName]="(manifest$ | async)?.name ?? 'Novo Projeto'" (openOrCreateProject)="openWorkspace()"
+    (openProjectFolder)="openProjectFolder()" (openProject)="openWorkspace()" (randomize)="randomize()"
+    (exportPng)="exportPng()" (help)="goToImport()" (renameProject)="onRenameProject($event)"
     (changeTemplate)="onChangeTemplate($event)">
 </app-topbar>
 
@@ -89,22 +90,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Footer -->
-        <footer class="cb-editor-footer">
-            <div class="cb-editor-footer__path">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                </svg>
-                <span class="cb-muted">Pasta atual:</span>
-                <strong class="cb-editor-footer__folder">{{ workspaceName$ | async }}</strong>
-                <button class="cb-editor-footer__change" type="button" (click)="openWorkspace()">Alterar</button>
-            </div>
-            <span class="cb-muted">Total de assets:
-                <strong>{{ totalAssets$ | async }} itens</strong>
-            </span>
-        </footer>
 
         <app-asset-gallery-modal [open]="showGallery" [title]="getActiveLayerName(manifest)"
             [items]="template.assets[activeLayerId] ?? []" [selectedId]="template.selected[activeLayerId]"

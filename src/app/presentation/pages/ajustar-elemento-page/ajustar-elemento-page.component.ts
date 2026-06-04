@@ -27,6 +27,8 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     scale = 1;
     opacity = 1;
     templateOpacity = 0.25;
+    templateViewZoom = 1;
+    templateViewOffset = { x: 0, y: 0 };
 
     private interaction: 'none' | 'move' | 'rotate' | 'scale' = 'none';
     private dragStart = { x: 0, y: 0 };
@@ -39,8 +41,17 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
     cropMode = false;
     cropRect: { x: number; y: number; w: number; h: number } | null = null;
+    cropType: 'rect' | 'oval' | 'freehand' = 'rect';
+    cropViewZoom = 1;
+    freehandPath: { x: number; y: number }[] = [];
     private cropDragging = false;
     private cropDragStart = { x: 0, y: 0 };
+    private cropDragHandle: 'none' | 'new' | 'move' | 'tl' | 'tr' | 'bl' | 'br' = 'none';
+    private cropRectSnapshot: { x: number; y: number; w: number; h: number } | null = null;
+    cropPanMode = false;
+    cropPanOffset = { x: 0, y: 0 };
+    private cropPanStart: { mx: number; my: number; ox: number; oy: number } | null = null;
+    private midPanStart: { mx: number; my: number; ox: number; oy: number } | null = null;
 
     constructor(
         @Inject(WorkspaceStore) private readonly store: WorkspaceStore,
@@ -79,6 +90,8 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         }
     }
 
+    private wheelHandler = (e: WheelEvent) => this.onCanvasWheel(e);
+
     async ngAfterViewInit(): Promise<void> {
         if (!this.elementUrl) return;
 
@@ -89,11 +102,14 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             try { this.templateImage = await this.loader.load(templateUrl); } catch { /* no template */ }
         }
 
+        this.canvas?.addEventListener('wheel', this.wheelHandler, { passive: false });
+
         this.draw();
     }
 
     ngOnDestroy(): void {
         if (this.elementUrl) URL.revokeObjectURL(this.elementUrl);
+        this.canvas?.removeEventListener('wheel', this.wheelHandler);
     }
 
     private get canvas(): HTMLCanvasElement | undefined {
@@ -115,6 +131,10 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             return;
         }
 
+        ctx.save();
+        ctx.translate(this.templateViewOffset.x, this.templateViewOffset.y);
+        ctx.scale(this.templateViewZoom, this.templateViewZoom);
+
         if (this.templateImage) {
             ctx.save();
             ctx.globalAlpha = this.templateOpacity;
@@ -133,6 +153,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         ctx.restore();
 
         this.drawHandles(ctx);
+        ctx.restore();
     }
 
     private drawHandles(ctx: CanvasRenderingContext2D): void {
@@ -156,7 +177,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
         ctx.save();
         ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-        ctx.lineWidth = 1.5 / this.scale;
+        ctx.lineWidth = 1.5 / (this.scale * this.templateViewZoom);
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
         ctx.moveTo(corners[0].x, corners[0].y);
@@ -170,9 +191,9 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         ctx.save();
         ctx.fillStyle = '#fff';
         ctx.strokeStyle = 'var(--cb-accent, #1f6feb)';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 / this.templateViewZoom;
         ctx.beginPath();
-        ctx.arc(corners[0].x, corners[0].y, 8, 0, Math.PI * 2);
+        ctx.arc(corners[0].x, corners[0].y, 8 / this.templateViewZoom, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.restore();
@@ -181,11 +202,18 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             ctx.save();
             ctx.fillStyle = '#fff';
             ctx.strokeStyle = '#888';
-            ctx.lineWidth = 1.5;
-            ctx.fillRect(pt.x - 5, pt.y - 5, 10, 10);
-            ctx.strokeRect(pt.x - 5, pt.y - 5, 10, 10);
+            ctx.lineWidth = 1.5 / this.templateViewZoom;
+            ctx.fillRect(pt.x - 5 / this.templateViewZoom, pt.y - 5 / this.templateViewZoom, 10 / this.templateViewZoom, 10 / this.templateViewZoom);
+            ctx.strokeRect(pt.x - 5 / this.templateViewZoom, pt.y - 5 / this.templateViewZoom, 10 / this.templateViewZoom, 10 / this.templateViewZoom);
             ctx.restore();
         }
+    }
+
+    private canvasToTemplateViewCoords(cx: number, cy: number): { x: number; y: number } {
+        return {
+            x: (cx - this.templateViewOffset.x) / this.templateViewZoom,
+            y: (cy - this.templateViewOffset.y) / this.templateViewZoom
+        };
     }
 
     private getCropFitTransform(): { fitScale: number; ox: number; oy: number } {
@@ -199,17 +227,41 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         return { fitScale, ox: (this.canvasW - iw) / 2, oy: (this.canvasH - ih) / 2 };
     }
 
+    private getCropDisplayTransform(): { fitScale: number; ox: number; oy: number } {
+        if (!this.elementImage) return { fitScale: 1, ox: 0, oy: 0 };
+        const fitScale = Math.min(
+            (this.canvasW * 0.9) / this.elementImage.naturalWidth,
+            (this.canvasH * 0.9) / this.elementImage.naturalHeight
+        ) * this.cropViewZoom;
+        const iw = this.elementImage.naturalWidth * fitScale;
+        const ih = this.elementImage.naturalHeight * fitScale;
+        return { fitScale, ox: (this.canvasW - iw) / 2 + this.cropPanOffset.x, oy: (this.canvasH - ih) / 2 + this.cropPanOffset.y };
+    }
+
     private canvasToCropImageCoords(cx: number, cy: number): { x: number; y: number } {
-        const { fitScale, ox, oy } = this.getCropFitTransform();
-        return {
-            x: Math.max(0, Math.min((cx - ox) / fitScale, this.elementImage!.naturalWidth)),
-            y: Math.max(0, Math.min((cy - oy) / fitScale, this.elementImage!.naturalHeight))
-        };
+        const { fitScale, ox, oy } = this.getCropDisplayTransform();
+        return { x: (cx - ox) / fitScale, y: (cy - oy) / fitScale };
+    }
+
+    private getCropHandleAt(mx: number, my: number): 'tl' | 'tr' | 'bl' | 'br' | 'move' | 'none' {
+        if (!this.cropRect) return 'none';
+        const { fitScale, ox, oy } = this.getCropDisplayTransform();
+        const rx = ox + this.cropRect.x * fitScale;
+        const ry = oy + this.cropRect.y * fitScale;
+        const rw = this.cropRect.w * fitScale;
+        const rh = this.cropRect.h * fitScale;
+        const T = 12;
+        if (Math.abs(mx - rx) <= T && Math.abs(my - ry) <= T) return 'tl';
+        if (Math.abs(mx - (rx + rw)) <= T && Math.abs(my - ry) <= T) return 'tr';
+        if (Math.abs(mx - rx) <= T && Math.abs(my - (ry + rh)) <= T) return 'bl';
+        if (Math.abs(mx - (rx + rw)) <= T && Math.abs(my - (ry + rh)) <= T) return 'br';
+        if (mx >= rx && mx <= rx + rw && my >= ry && my <= ry + rh) return 'move';
+        return 'none';
     }
 
     private drawCropMode(ctx: CanvasRenderingContext2D): void {
         if (!this.elementImage) return;
-        const { fitScale, ox, oy } = this.getCropFitTransform();
+        const { fitScale, ox, oy } = this.getCropDisplayTransform();
         const iw = this.elementImage.naturalWidth * fitScale;
         const ih = this.elementImage.naturalHeight * fitScale;
 
@@ -217,47 +269,89 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(0, 0, this.canvasW, this.canvasH);
 
-        if (this.cropRect && this.cropRect.w > 1 && this.cropRect.h > 1) {
-            const rx = ox + this.cropRect.x * fitScale;
-            const ry = oy + this.cropRect.y * fitScale;
-            const rw = this.cropRect.w * fitScale;
-            const rh = this.cropRect.h * fitScale;
+        if (this.cropType === 'freehand') {
+            this.drawFreehandSelection(ctx, fitScale, ox, oy, iw, ih);
+            return;
+        }
 
-            ctx.save();
-            ctx.beginPath();
+        if (!this.cropRect || this.cropRect.w < 2 || this.cropRect.h < 2) return;
+
+        const rx = ox + this.cropRect.x * fitScale;
+        const ry = oy + this.cropRect.y * fitScale;
+        const rw = this.cropRect.w * fitScale;
+        const rh = this.cropRect.h * fitScale;
+
+        // Reveal selected area
+        ctx.save();
+        ctx.beginPath();
+        if (this.cropType === 'oval') {
+            ctx.ellipse(rx + rw / 2, ry + rh / 2, Math.abs(rw / 2), Math.abs(rh / 2), 0, 0, Math.PI * 2);
+        } else {
             ctx.rect(rx, ry, rw, rh);
-            ctx.clip();
-            ctx.drawImage(this.elementImage, ox, oy, iw, ih);
-            ctx.restore();
+        }
+        ctx.clip();
+        ctx.drawImage(this.elementImage, ox, oy, iw, ih);
+        ctx.restore();
 
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([]);
+        // Selection border
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        if (this.cropType === 'oval') {
+            ctx.beginPath();
+            ctx.ellipse(rx + rw / 2, ry + rh / 2, Math.abs(rw / 2), Math.abs(rh / 2), 0, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
             ctx.strokeRect(rx, ry, rw, rh);
-
             ctx.strokeStyle = 'rgba(255,255,255,0.35)';
             ctx.lineWidth = 1;
             for (let i = 1; i < 3; i++) {
                 ctx.beginPath(); ctx.moveTo(rx + rw * i / 3, ry); ctx.lineTo(rx + rw * i / 3, ry + rh); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(rx, ry + rh * i / 3); ctx.lineTo(rx + rw, ry + rh * i / 3); ctx.stroke();
             }
+        }
 
-            const handles = [
-                { x: rx, y: ry }, { x: rx + rw, y: ry },
-                { x: rx, y: ry + rh }, { x: rx + rw, y: ry + rh }
-            ];
+        // Corner handles (draggable)
+        const handles = [
+            { x: rx, y: ry }, { x: rx + rw, y: ry },
+            { x: rx, y: ry + rh }, { x: rx + rw, y: ry + rh }
+        ];
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        for (const h of handles) {
             ctx.fillStyle = '#fff';
-            ctx.strokeStyle = 'var(--cb-accent, #1f6feb)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([]);
-            for (const h of handles) {
-                ctx.fillRect(h.x - 5, h.y - 5, 10, 10);
-                ctx.strokeRect(h.x - 5, h.y - 5, 10, 10);
-            }
+            ctx.strokeStyle = '#1a7abf';
+            ctx.fillRect(h.x - 6, h.y - 6, 12, 12);
+            ctx.strokeRect(h.x - 6, h.y - 6, 12, 12);
         }
     }
 
-    private toCanvasCoords(event: MouseEvent): { x: number; y: number } | null {
+    private drawFreehandSelection(ctx: CanvasRenderingContext2D, fitScale: number, ox: number, oy: number, iw: number, ih: number): void {
+        if (this.freehandPath.length < 2) return;
+        const pts = this.freehandPath.map(p => ({ x: p.x * fitScale + ox, y: p.y * fitScale + oy }));
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const pt of pts.slice(1)) ctx.lineTo(pt.x, pt.y);
+        if (!this.cropDragging) ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(this.elementImage!, ox, oy, iw, ih);
+        ctx.restore();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const pt of pts.slice(1)) ctx.lineTo(pt.x, pt.y);
+        if (!this.cropDragging) ctx.closePath();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    private toCanvasCoords(event: MouseEvent | WheelEvent): { x: number; y: number } | null {
         if (!this.canvas) return null;
         const rect = this.canvas.getBoundingClientRect();
         const sx = this.canvas.width / rect.width;
@@ -292,10 +386,81 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         return 'none';
     }
 
+    onCanvasWheel(event: WheelEvent): void {
+        event.preventDefault();
+        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+        const pt = this.toCanvasCoords(event);
+        if (!pt) return;
+
+        if (this.cropMode) {
+            const before = this.canvasToCropImageCoords(pt.x, pt.y);
+            const nextZoom = Math.max(1, Math.min(5, this.cropViewZoom * zoomFactor));
+            if (nextZoom === this.cropViewZoom || !this.elementImage) return;
+
+            const nextFitScale = Math.min(
+                (this.canvasW * 0.9) / this.elementImage.naturalWidth,
+                (this.canvasH * 0.9) / this.elementImage.naturalHeight
+            ) * nextZoom;
+            const baseOx = (this.canvasW - this.elementImage.naturalWidth * nextFitScale) / 2;
+            const baseOy = (this.canvasH - this.elementImage.naturalHeight * nextFitScale) / 2;
+
+            this.cropViewZoom = nextZoom;
+            this.cropPanOffset.x = pt.x - baseOx - before.x * nextFitScale;
+            this.cropPanOffset.y = pt.y - baseOy - before.y * nextFitScale;
+            this.draw();
+        } else {
+            const before = this.canvasToTemplateViewCoords(pt.x, pt.y);
+            const nextZoom = Math.max(0.25, Math.min(8, this.templateViewZoom * zoomFactor));
+            if (nextZoom === this.templateViewZoom) return;
+
+            this.templateViewZoom = nextZoom;
+            this.templateViewOffset.x = pt.x - before.x * nextZoom;
+            this.templateViewOffset.y = pt.y - before.y * nextZoom;
+            this.draw();
+        }
+    }
+
     onCanvasMouseDown(event: MouseEvent): void {
+        if (event.button === 1) {
+            event.preventDefault();
+            if (this.cropMode) {
+                const pt = this.toCanvasCoords(event);
+                if (!pt) return;
+                this.cropPanStart = { mx: pt.x, my: pt.y, ox: this.cropPanOffset.x, oy: this.cropPanOffset.y };
+            } else {
+                const pt = this.toCanvasCoords(event);
+                if (!pt) return;
+                this.midPanStart = { mx: pt.x, my: pt.y, ox: this.templateViewOffset.x, oy: this.templateViewOffset.y };
+            }
+            return;
+        }
         if (this.cropMode) {
             const pt = this.toCanvasCoords(event);
             if (!pt || !this.elementImage) return;
+
+            if (this.cropPanMode) {
+                this.cropPanStart = { mx: pt.x, my: pt.y, ox: this.cropPanOffset.x, oy: this.cropPanOffset.y };
+                return;
+            }
+
+            if (this.cropType === 'freehand') {
+                this.cropDragging = true;
+                this.freehandPath = [this.canvasToCropImageCoords(pt.x, pt.y)];
+                return;
+            }
+
+            if (this.cropRect) {
+                const handle = this.getCropHandleAt(pt.x, pt.y);
+                if (handle !== 'none') {
+                    this.cropDragHandle = handle;
+                    this.cropDragging = true;
+                    this.cropDragStart = this.canvasToCropImageCoords(pt.x, pt.y);
+                    this.cropRectSnapshot = { ...this.cropRect };
+                    return;
+                }
+            }
+
+            this.cropDragHandle = 'new';
             this.cropDragging = true;
             const imgPt = this.canvasToCropImageCoords(pt.x, pt.y);
             this.cropDragStart = imgPt;
@@ -303,8 +468,9 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             return;
         }
         if (!this.elementImage || !this.canvas) return;
-        const pt = this.toCanvasCoords(event);
-        if (!pt) return;
+        const canvasPt = this.toCanvasCoords(event);
+        if (!canvasPt) return;
+        const pt = this.canvasToTemplateViewCoords(canvasPt.x, canvasPt.y);
         this.dragStart = pt;
         this.posSnapshot = { ...this.pos };
         this.rotSnapshot = this.rotation;
@@ -314,22 +480,91 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
     onCanvasMouseMove(event: MouseEvent): void {
         if (this.cropMode) {
-            this.canvasCursor = 'crosshair';
-            if (!this.cropDragging) return;
             const pt = this.toCanvasCoords(event);
             if (!pt) return;
+
+            // Middle-mouse pan (button 1 held)
+            if (event.buttons === 4) {
+                this.canvasCursor = 'grabbing';
+                if (this.cropPanStart) {
+                    this.cropPanOffset.x = this.cropPanStart.ox + (pt.x - this.cropPanStart.mx);
+                    this.cropPanOffset.y = this.cropPanStart.oy + (pt.y - this.cropPanStart.my);
+                    this.draw();
+                }
+                return;
+            }
+
+            if (this.cropPanMode) {
+                this.canvasCursor = this.cropPanStart ? 'grabbing' : 'grab';
+                if (this.cropPanStart) {
+                    this.cropPanOffset.x = this.cropPanStart.ox + (pt.x - this.cropPanStart.mx);
+                    this.cropPanOffset.y = this.cropPanStart.oy + (pt.y - this.cropPanStart.my);
+                    this.draw();
+                }
+                return;
+            }
+
+            if (this.cropType === 'freehand') {
+                this.canvasCursor = 'crosshair';
+                if (this.cropDragging) {
+                    this.freehandPath.push(this.canvasToCropImageCoords(pt.x, pt.y));
+                    this.draw();
+                }
+                return;
+            }
+
+            if (!this.cropDragging) {
+                if (this.cropRect) {
+                    const cursorMap: Record<string, string> = {
+                        tl: 'nwse-resize', br: 'nwse-resize',
+                        tr: 'nesw-resize', bl: 'nesw-resize',
+                        move: 'move', none: 'crosshair'
+                    };
+                    this.canvasCursor = cursorMap[this.getCropHandleAt(pt.x, pt.y)];
+                } else {
+                    this.canvasCursor = 'crosshair';
+                }
+                return;
+            }
+
+            this.canvasCursor = 'crosshair';
             const imgPt = this.canvasToCropImageCoords(pt.x, pt.y);
-            this.cropRect = {
-                x: Math.min(this.cropDragStart.x, imgPt.x),
-                y: Math.min(this.cropDragStart.y, imgPt.y),
-                w: Math.abs(imgPt.x - this.cropDragStart.x),
-                h: Math.abs(imgPt.y - this.cropDragStart.y)
-            };
+            const snap = this.cropRectSnapshot;
+            const dx = imgPt.x - this.cropDragStart.x;
+            const dy = imgPt.y - this.cropDragStart.y;
+
+            if (this.cropDragHandle === 'new') {
+                this.cropRect = {
+                    x: Math.min(this.cropDragStart.x, imgPt.x),
+                    y: Math.min(this.cropDragStart.y, imgPt.y),
+                    w: Math.abs(imgPt.x - this.cropDragStart.x),
+                    h: Math.abs(imgPt.y - this.cropDragStart.y)
+                };
+            } else if (snap) {
+                switch (this.cropDragHandle) {
+                    case 'move': this.cropRect = { x: snap.x + dx, y: snap.y + dy, w: snap.w, h: snap.h }; break;
+                    case 'tl': this.cropRect = { x: snap.x + dx, y: snap.y + dy, w: Math.max(2, snap.w - dx), h: Math.max(2, snap.h - dy) }; break;
+                    case 'tr': this.cropRect = { x: snap.x, y: snap.y + dy, w: Math.max(2, snap.w + dx), h: Math.max(2, snap.h - dy) }; break;
+                    case 'bl': this.cropRect = { x: snap.x + dx, y: snap.y, w: Math.max(2, snap.w - dx), h: Math.max(2, snap.h + dy) }; break;
+                    case 'br': this.cropRect = { x: snap.x, y: snap.y, w: Math.max(2, snap.w + dx), h: Math.max(2, snap.h + dy) }; break;
+                }
+            }
             this.draw();
             return;
         }
-        const pt = this.toCanvasCoords(event);
-        if (!pt) return;
+        const canvasPt = this.toCanvasCoords(event);
+        if (!canvasPt) return;
+
+        // Middle-mouse pan in normal mode
+        if (event.buttons === 4 && this.midPanStart) {
+            this.canvasCursor = 'grabbing';
+            this.templateViewOffset.x = this.midPanStart.ox + (canvasPt.x - this.midPanStart.mx);
+            this.templateViewOffset.y = this.midPanStart.oy + (canvasPt.y - this.midPanStart.my);
+            this.draw();
+            return;
+        }
+
+        const pt = this.canvasToTemplateViewCoords(canvasPt.x, canvasPt.y);
 
         if (this.interaction === 'none') {
             const hit = this.getInteractionAt(pt.x, pt.y);
@@ -356,8 +591,24 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         this.draw();
     }
 
-    onCanvasMouseUp(): void {
-        if (this.cropMode) { this.cropDragging = false; return; }
+    onCanvasMouseUp(event?: MouseEvent): void {
+        if (event?.button === 1) {
+            this.cropPanStart = null;
+            this.midPanStart = null;
+            return;
+        }
+        if (this.cropMode) {
+            this.cropPanStart = null;
+            if (this.cropType === 'freehand' && this.cropDragging && this.freehandPath.length > 2) {
+                this.cropDragging = false;
+                this.draw();
+                return;
+            }
+            this.cropDragging = false;
+            this.cropDragHandle = 'none';
+            this.cropRectSnapshot = null;
+            return;
+        }
         this.interaction = 'none';
     }
 
@@ -371,28 +622,96 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         this.rotation = 0;
         this.scale = 1;
         this.opacity = 1;
+        this.templateViewZoom = 1;
+        this.templateViewOffset = { x: 0, y: 0 };
         this.draw();
     }
 
     enterCropMode(): void {
         this.cropMode = true;
         this.cropRect = null;
+        this.freehandPath = [];
+        this.cropViewZoom = 1;
+        this.cropType = 'rect';
+        this.cropPanMode = false;
+        this.cropPanOffset = { x: 0, y: 0 };
+        this.cropPanStart = null;
         this.draw();
     }
 
     cancelCrop(): void {
         this.cropMode = false;
         this.cropRect = null;
+        this.freehandPath = [];
+        this.draw();
+    }
+
+    resetCropSelection(): void {
+        this.cropRect = null;
+        this.freehandPath = [];
+        this.draw();
+    }
+
+    setCropViewZoom(value: number): void {
+        this.cropViewZoom = Math.max(1, Math.min(5, value));
         this.draw();
     }
 
     applyCrop(): void {
-        if (!this.elementImage || !this.cropRect || this.cropRect.w < 1 || this.cropRect.h < 1) return;
+        if (!this.elementImage) return;
+
+        if (this.cropType === 'freehand') {
+            if (this.freehandPath.length < 3) return;
+            this.applyFreehandCrop();
+            return;
+        }
+
+        if (!this.cropRect || this.cropRect.w < 2 || this.cropRect.h < 2) return;
         const { x, y, w, h } = this.cropRect;
+        const cw = Math.round(Math.abs(w));
+        const ch = Math.round(Math.abs(h));
+
         const cropCanvas = document.createElement('canvas');
-        cropCanvas.width = Math.round(w);
-        cropCanvas.height = Math.round(h);
-        cropCanvas.getContext('2d')!.drawImage(this.elementImage, -Math.round(x), -Math.round(y));
+        cropCanvas.width = cw;
+        cropCanvas.height = ch;
+        const ctx = cropCanvas.getContext('2d')!;
+
+        if (this.cropType === 'oval') {
+            ctx.beginPath();
+            ctx.ellipse(cw / 2, ch / 2, cw / 2, ch / 2, 0, 0, Math.PI * 2);
+            ctx.clip();
+        }
+
+        ctx.drawImage(this.elementImage, -Math.round(x), -Math.round(y));
+        this.commitCropCanvas(cropCanvas);
+    }
+
+    private applyFreehandCrop(): void {
+        if (!this.elementImage || this.freehandPath.length < 3) return;
+        const xs = this.freehandPath.map(p => p.x);
+        const ys = this.freehandPath.map(p => p.y);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        const maxX = Math.max(...xs);
+        const maxY = Math.max(...ys);
+        const cw = Math.ceil(maxX - minX);
+        const ch = Math.ceil(maxY - minY);
+        if (cw < 2 || ch < 2) return;
+
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = cw;
+        cropCanvas.height = ch;
+        const ctx = cropCanvas.getContext('2d')!;
+        ctx.beginPath();
+        ctx.moveTo(this.freehandPath[0].x - minX, this.freehandPath[0].y - minY);
+        for (const pt of this.freehandPath.slice(1)) ctx.lineTo(pt.x - minX, pt.y - minY);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(this.elementImage, -Math.round(minX), -Math.round(minY));
+        this.commitCropCanvas(cropCanvas);
+    }
+
+    private commitCropCanvas(cropCanvas: HTMLCanvasElement): void {
         const dataUrl = cropCanvas.toDataURL('image/png');
         const byteString = atob(dataUrl.split(',')[1]);
         const ab = new Uint8Array(byteString.length);
@@ -405,6 +724,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             this.elementImage = newImg;
             this.cropMode = false;
             this.cropRect = null;
+            this.freehandPath = [];
             this.draw();
         };
         newImg.src = dataUrl;

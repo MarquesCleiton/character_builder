@@ -10,6 +10,8 @@ import { APP_VERSION } from '../../../shared/constants/ui.constants';
 export class TopbarComponent {
     @Input() projectName = 'Novo Projeto';
     @Output() openProject = new EventEmitter<void>();
+    @Output() openOrCreateProject = new EventEmitter<void>();
+    @Output() openProjectFolder = new EventEmitter<void>();
     @Output() randomize = new EventEmitter<void>();
     @Output() exportPng = new EventEmitter<void>();
     @Output() help = new EventEmitter<void>();
