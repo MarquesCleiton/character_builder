@@ -20,7 +20,9 @@
         <div class="cb-adjust__canvas-wrap">
             <canvas #adjustCanvas class="cb-adjust__canvas" [style.cursor]="canvasCursor"
                 (mousedown)="onCanvasMouseDown($event)" (mousemove)="onCanvasMouseMove($event)"
-                (mouseup)="onCanvasMouseUp($event)" (mouseleave)="onCanvasMouseUp($event)">
+                (mouseup)="onCanvasMouseUp($event)" (mouseleave)="onCanvasMouseUp($event)"
+                (touchstart)="onCanvasTouchStart($event)" (touchmove)="onCanvasTouchMove($event)"
+                (touchend)="onCanvasTouchEnd($event)" (touchcancel)="onCanvasTouchEnd($event)">
             </canvas>
             <div class="cb-adjust__canvas-placeholder" *ngIf="!elementImage">
                 <p class="cb-muted">Carregando...</p>

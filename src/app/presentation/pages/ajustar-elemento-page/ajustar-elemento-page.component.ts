@@ -52,6 +52,11 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     cropPanOffset = { x: 0, y: 0 };
     private cropPanStart: { mx: number; my: number; ox: number; oy: number } | null = null;
     private midPanStart: { mx: number; my: number; ox: number; oy: number } | null = null;
+    private touchPinchStartDistance = 0;
+    private touchPinchStartZoom = 1;
+    private touchPinchStartTemplateOffset = { x: 0, y: 0 };
+    private touchPinchStartCropOffset = { x: 0, y: 0 };
+    private touchPinchImagePoint = { x: 0, y: 0 };
 
     constructor(
         @Inject(WorkspaceStore) private readonly store: WorkspaceStore,
@@ -243,6 +248,19 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         return { x: (cx - ox) / fitScale, y: (cy - oy) / fitScale };
     }
 
+    private canvasToCropImageCoordsWithState(cx: number, cy: number, viewZoom: number, panOffset: { x: number; y: number }): { x: number; y: number } {
+        if (!this.elementImage) return { x: 0, y: 0 };
+        const fitScale = Math.min(
+            (this.canvasW * 0.9) / this.elementImage.naturalWidth,
+            (this.canvasH * 0.9) / this.elementImage.naturalHeight
+        ) * viewZoom;
+        const iw = this.elementImage.naturalWidth * fitScale;
+        const ih = this.elementImage.naturalHeight * fitScale;
+        const ox = (this.canvasW - iw) / 2 + panOffset.x;
+        const oy = (this.canvasH - ih) / 2 + panOffset.y;
+        return { x: (cx - ox) / fitScale, y: (cy - oy) / fitScale };
+    }
+
     private getCropHandleAt(mx: number, my: number): 'tl' | 'tr' | 'bl' | 'br' | 'move' | 'none' {
         if (!this.cropRect) return 'none';
         const { fitScale, ox, oy } = this.getCropDisplayTransform();
@@ -360,6 +378,21 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             x: (event.clientX - rect.left) * sx,
             y: (event.clientY - rect.top) * sy
         };
+    }
+
+    private toCanvasCoordsFromClient(clientX: number, clientY: number): { x: number; y: number } | null {
+        if (!this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        const sx = this.canvas.width / rect.width;
+        const sy = this.canvas.height / rect.height;
+        return {
+            x: (clientX - rect.left) * sx,
+            y: (clientY - rect.top) * sy
+        };
+    }
+
+    private touchDistance(a: Touch, b: Touch): number {
+        return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     }
 
     private getInteractionAt(mx: number, my: number): 'rotate' | 'scale' | 'move' | 'none' {
@@ -609,6 +642,215 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             this.cropRectSnapshot = null;
             return;
         }
+        this.interaction = 'none';
+    }
+
+    onCanvasTouchStart(event: TouchEvent): void {
+        if (!this.canvas) return;
+
+        if (event.touches.length === 2) {
+            event.preventDefault();
+            const a = event.touches[0];
+            const b = event.touches[1];
+            const pa = this.toCanvasCoordsFromClient(a.clientX, a.clientY);
+            const pb = this.toCanvasCoordsFromClient(b.clientX, b.clientY);
+            if (!pa || !pb) return;
+
+            const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+            this.touchPinchStartDistance = this.touchDistance(a, b);
+
+            if (this.cropMode) {
+                this.touchPinchStartZoom = this.cropViewZoom;
+                this.touchPinchStartCropOffset = { ...this.cropPanOffset };
+                this.touchPinchImagePoint = this.canvasToCropImageCoordsWithState(
+                    mid.x,
+                    mid.y,
+                    this.touchPinchStartZoom,
+                    this.touchPinchStartCropOffset
+                );
+            } else {
+                this.touchPinchStartZoom = this.templateViewZoom;
+                this.touchPinchStartTemplateOffset = { ...this.templateViewOffset };
+                this.touchPinchImagePoint = {
+                    x: (mid.x - this.touchPinchStartTemplateOffset.x) / this.touchPinchStartZoom,
+                    y: (mid.y - this.touchPinchStartTemplateOffset.y) / this.touchPinchStartZoom
+                };
+            }
+            return;
+        }
+
+        if (event.touches.length !== 1) return;
+        event.preventDefault();
+        const touch = event.touches[0];
+        const pt = this.toCanvasCoordsFromClient(touch.clientX, touch.clientY);
+        if (!pt) return;
+
+        if (this.cropMode) {
+            if (!this.elementImage) return;
+
+            if (this.cropPanMode) {
+                this.cropPanStart = { mx: pt.x, my: pt.y, ox: this.cropPanOffset.x, oy: this.cropPanOffset.y };
+                return;
+            }
+
+            if (this.cropType === 'freehand') {
+                this.cropDragging = true;
+                this.freehandPath = [this.canvasToCropImageCoords(pt.x, pt.y)];
+                return;
+            }
+
+            if (this.cropRect) {
+                const handle = this.getCropHandleAt(pt.x, pt.y);
+                if (handle !== 'none') {
+                    this.cropDragHandle = handle;
+                    this.cropDragging = true;
+                    this.cropDragStart = this.canvasToCropImageCoords(pt.x, pt.y);
+                    this.cropRectSnapshot = { ...this.cropRect };
+                    return;
+                }
+            }
+
+            this.cropDragHandle = 'new';
+            this.cropDragging = true;
+            const imgPt = this.canvasToCropImageCoords(pt.x, pt.y);
+            this.cropDragStart = imgPt;
+            this.cropRect = { x: imgPt.x, y: imgPt.y, w: 0, h: 0 };
+            return;
+        }
+
+        if (!this.elementImage) return;
+        const p = this.canvasToTemplateViewCoords(pt.x, pt.y);
+        this.dragStart = p;
+        this.posSnapshot = { ...this.pos };
+        this.rotSnapshot = this.rotation;
+        this.scaleSnapshot = this.scale;
+        this.interaction = this.getInteractionAt(p.x, p.y);
+    }
+
+    onCanvasTouchMove(event: TouchEvent): void {
+        if (!this.canvas) return;
+
+        if (event.touches.length === 2 && this.touchPinchStartDistance > 0) {
+            event.preventDefault();
+            const a = event.touches[0];
+            const b = event.touches[1];
+            const pa = this.toCanvasCoordsFromClient(a.clientX, a.clientY);
+            const pb = this.toCanvasCoordsFromClient(b.clientX, b.clientY);
+            if (!pa || !pb) return;
+
+            const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+            const ratio = this.touchDistance(a, b) / this.touchPinchStartDistance;
+
+            if (this.cropMode) {
+                const newZoom = Math.max(1, Math.min(5, this.touchPinchStartZoom * ratio));
+                this.cropViewZoom = newZoom;
+
+                if (this.elementImage) {
+                    const fitScale = Math.min(
+                        (this.canvasW * 0.9) / this.elementImage.naturalWidth,
+                        (this.canvasH * 0.9) / this.elementImage.naturalHeight
+                    ) * newZoom;
+                    const baseOx = (this.canvasW - this.elementImage.naturalWidth * fitScale) / 2;
+                    const baseOy = (this.canvasH - this.elementImage.naturalHeight * fitScale) / 2;
+                    this.cropPanOffset.x = mid.x - baseOx - this.touchPinchImagePoint.x * fitScale;
+                    this.cropPanOffset.y = mid.y - baseOy - this.touchPinchImagePoint.y * fitScale;
+                }
+            } else {
+                const newZoom = Math.max(0.25, Math.min(8, this.touchPinchStartZoom * ratio));
+                this.templateViewZoom = newZoom;
+                this.templateViewOffset.x = mid.x - this.touchPinchImagePoint.x * newZoom;
+                this.templateViewOffset.y = mid.y - this.touchPinchImagePoint.y * newZoom;
+            }
+
+            this.draw();
+            return;
+        }
+
+        if (event.touches.length !== 1) return;
+        event.preventDefault();
+        const touch = event.touches[0];
+        const pt = this.toCanvasCoordsFromClient(touch.clientX, touch.clientY);
+        if (!pt) return;
+
+        if (this.cropMode) {
+            if (this.cropPanMode && this.cropPanStart) {
+                this.cropPanOffset.x = this.cropPanStart.ox + (pt.x - this.cropPanStart.mx);
+                this.cropPanOffset.y = this.cropPanStart.oy + (pt.y - this.cropPanStart.my);
+                this.draw();
+                return;
+            }
+
+            if (this.cropType === 'freehand') {
+                if (this.cropDragging) {
+                    this.freehandPath.push(this.canvasToCropImageCoords(pt.x, pt.y));
+                    this.draw();
+                }
+                return;
+            }
+
+            if (!this.cropDragging) return;
+
+            const imgPt = this.canvasToCropImageCoords(pt.x, pt.y);
+            const snap = this.cropRectSnapshot;
+            const dx = imgPt.x - this.cropDragStart.x;
+            const dy = imgPt.y - this.cropDragStart.y;
+
+            if (this.cropDragHandle === 'new') {
+                this.cropRect = {
+                    x: Math.min(this.cropDragStart.x, imgPt.x),
+                    y: Math.min(this.cropDragStart.y, imgPt.y),
+                    w: Math.abs(imgPt.x - this.cropDragStart.x),
+                    h: Math.abs(imgPt.y - this.cropDragStart.y)
+                };
+            } else if (snap) {
+                switch (this.cropDragHandle) {
+                    case 'move': this.cropRect = { x: snap.x + dx, y: snap.y + dy, w: snap.w, h: snap.h }; break;
+                    case 'tl': this.cropRect = { x: snap.x + dx, y: snap.y + dy, w: Math.max(2, snap.w - dx), h: Math.max(2, snap.h - dy) }; break;
+                    case 'tr': this.cropRect = { x: snap.x, y: snap.y + dy, w: Math.max(2, snap.w + dx), h: Math.max(2, snap.h - dy) }; break;
+                    case 'bl': this.cropRect = { x: snap.x + dx, y: snap.y, w: Math.max(2, snap.w - dx), h: Math.max(2, snap.h + dy) }; break;
+                    case 'br': this.cropRect = { x: snap.x, y: snap.y, w: Math.max(2, snap.w + dx), h: Math.max(2, snap.h + dy) }; break;
+                }
+            }
+
+            this.draw();
+            return;
+        }
+
+        if (this.interaction === 'none') return;
+        const p = this.canvasToTemplateViewCoords(pt.x, pt.y);
+
+        if (this.interaction === 'move') {
+            this.pos.x = this.posSnapshot.x + (p.x - this.dragStart.x);
+            this.pos.y = this.posSnapshot.y + (p.y - this.dragStart.y);
+        } else if (this.interaction === 'rotate') {
+            const angle = Math.atan2(p.y - this.pos.y, p.x - this.pos.x);
+            const startAngle = Math.atan2(this.dragStart.y - this.posSnapshot.y, this.dragStart.x - this.posSnapshot.x);
+            this.rotation = this.rotSnapshot + ((angle - startAngle) * 180) / Math.PI;
+        } else if (this.interaction === 'scale') {
+            const dist = Math.hypot(p.x - this.pos.x, p.y - this.pos.y);
+            const startDist = Math.hypot(this.dragStart.x - this.posSnapshot.x, this.dragStart.y - this.posSnapshot.y);
+            if (startDist > 0) this.scale = Math.max(0.05, this.scaleSnapshot * (dist / startDist));
+        }
+
+        this.draw();
+    }
+
+    onCanvasTouchEnd(_event: TouchEvent): void {
+        this.touchPinchStartDistance = 0;
+        this.cropPanStart = null;
+
+        if (this.cropMode) {
+            if (this.cropType === 'freehand' && this.cropDragging && this.freehandPath.length > 2) {
+                this.cropDragging = false;
+                this.draw();
+                return;
+            }
+            this.cropDragging = false;
+            this.cropDragHandle = 'none';
+            this.cropRectSnapshot = null;
+            return;
+        }
+
         this.interaction = 'none';
     }
 
