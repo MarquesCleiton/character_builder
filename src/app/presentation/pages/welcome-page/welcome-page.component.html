@@ -5,6 +5,21 @@
         <p class="cb-muted">Criação e edição por camadas, direto no navegador.</p>
     </header>
 
+    <!-- Recent workspace button if available -->
+    <button *ngIf="recentWorkspaceName" class="cb-project-card cb-project-card--highlight" type="button"
+        (click)="recoverRecentWorkspace()">
+        <div class="cb-project-card__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path>
+                <polyline points="17 16 12 12 7 16"></polyline>
+                <line x1="12" y1="12" x2="12" y2="21"></line>
+            </svg>
+        </div>
+        <strong>Restaurar: {{ recentWorkspaceName }}</strong>
+        <span class="cb-muted">Clique para abrir o último projeto</span>
+    </button>
+
     <button class="cb-project-card" type="button" (click)="openWorkspace()">
         <div class="cb-project-card__icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"

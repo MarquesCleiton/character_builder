@@ -1,7 +1,6 @@
 <app-topbar [projectName]="(manifest$ | async)?.name ?? 'Novo Projeto'" (openOrCreateProject)="openWorkspace()"
-    (openProjectFolder)="openProjectFolder()" (openProject)="openWorkspace()" (randomize)="randomize()"
-    (exportPng)="exportPng()" (help)="goToImport()" (renameProject)="onRenameProject($event)"
-    (changeTemplate)="onChangeTemplate($event)">
+    (openProject)="openWorkspace()" (randomize)="randomize()" (exportPng)="exportPng()" (help)="goToImport()"
+    (renameProject)="onRenameProject($event)" (changeTemplate)="onChangeTemplate($event)">
 </app-topbar>
 
 <ng-container *ngIf="manifest$ | async as manifest">

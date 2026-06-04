@@ -12,6 +12,7 @@ import { NewProjectConfig } from '../../components/project-name-modal/project-na
 export class WelcomePageComponent implements OnInit {
     showModal = false;
     projectName = '';
+    recentWorkspaceName = '';
     private pendingHandle: FileSystemDirectoryHandle | null = null;
 
     constructor(
@@ -21,6 +22,9 @@ export class WelcomePageComponent implements OnInit {
     ) { }
 
     async ngOnInit(): Promise<void> {
+        // Check if there's a recent workspace and try to restore
+        this.recentWorkspaceName = this.files.getRecentWorkspaceName();
+
         const restored = await this.files.restoreRecentWorkspace();
         if (!restored?.project) return;
         this.store.loadWorkspace(restored.handle, restored.project);
@@ -57,6 +61,36 @@ export class WelcomePageComponent implements OnInit {
             await this.store.updateTemplate(config.template);
         }
         this.pendingHandle = null;
+        this.router.navigate(['/editor']);
+    }
+
+    async recoverRecentWorkspace(): Promise<void> {
+        if (!this.recentWorkspaceName) {
+            window.alert('Nenhum projeto anterior encontrado.');
+            return;
+        }
+
+        const restored = await this.files.restoreRecentWorkspace();
+        if (restored?.project) {
+            this.store.loadWorkspace(restored.handle, restored.project);
+            this.router.navigate(['/editor']);
+            return;
+        }
+
+        // If automatic restore failed, offer to reauthorize by selecting the folder
+        const confirmed = window.confirm(
+            `As permissões do projeto "${this.recentWorkspaceName}" expiraram. ` +
+            `Deseja selecioná-lo novamente para restaurar?`
+        );
+        if (!confirmed) return;
+
+        const selection = await this.files.selectWorkspace();
+        if (!selection?.project) {
+            window.alert('Não foi possível restaurar o projeto.');
+            return;
+        }
+
+        this.store.loadWorkspace(selection.handle, selection.project);
         this.router.navigate(['/editor']);
     }
 }

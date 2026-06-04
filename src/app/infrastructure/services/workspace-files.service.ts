@@ -95,11 +95,23 @@ export class WorkspaceFilesService {
         try {
             const maybePermHandle = handle as FileSystemDirectoryHandle & {
                 queryPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
+                requestPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
             };
+
+            // Try to verify existing permission
+            let permission: PermissionState | undefined;
             if (maybePermHandle.queryPermission) {
-                const permission = await maybePermHandle.queryPermission({ mode: 'readwrite' });
-                if (permission !== 'granted') return null;
+                permission = await maybePermHandle.queryPermission({ mode: 'readwrite' });
             }
+
+            // If permission denied, try requesting it
+            if (permission === 'denied' && maybePermHandle.requestPermission) {
+                permission = await maybePermHandle.requestPermission({ mode: 'readwrite' });
+            }
+
+            // If still not granted, bail out
+            if (permission && permission !== 'granted') return null;
+
             const raw = await this.readRawManifest(handle);
             if (!raw) return null;
             const manifestFile = this.ensureNewFormat(raw);
@@ -112,6 +124,14 @@ export class WorkspaceFilesService {
 
     getRecentWorkspaceName(): string {
         return localStorage.getItem(RECENT_WORKSPACE_NAME_KEY) ?? '';
+    }
+
+    hasRecentWorkspace(): boolean {
+        return !!localStorage.getItem(RECENT_WORKSPACE_NAME_KEY);
+    }
+
+    getRecentWorkspaceDate(): string {
+        return localStorage.getItem(RECENT_WORKSPACE_AT_KEY) ?? '';
     }
 
     async selectWorkspace(): Promise<WorkspaceSelection | null> {

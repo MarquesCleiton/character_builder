@@ -1,4 +1,4 @@
-﻿import { Component } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Router } from '@angular/router';
@@ -16,7 +16,7 @@ import { WorkspaceStore } from '../../../infrastructure/state/workspace.store';
     templateUrl: './editor-page.component.html',
     styleUrls: ['./editor-page.component.scss']
 })
-export class EditorPageComponent {
+export class EditorPageComponent implements OnInit {
     readonly manifest$: Observable<ProjectManifest> = this.store.manifest$;
     readonly workspaceName$: Observable<string> = this.store.workspaceName$;
     readonly totalAssets$: Observable<number> = this.store.manifest$.pipe(
@@ -37,6 +37,22 @@ export class EditorPageComponent {
         private readonly files: WorkspaceFilesService,
         private readonly importState: AssetImportStateService
     ) { }
+
+    async ngOnInit(): Promise<void> {
+        // Check if workspace is loaded; if empty on editor load, restore from storage
+        const current = this.store.snapshot;
+        const isEmpty = current.name === 'Novo Projeto' && current.templates.length === 1 && current.templates[0]?.assets && Object.keys(current.templates[0].assets).every(k => !current.templates[0].assets[k].length);
+
+        if (isEmpty) {
+            const restored = await this.files.restoreRecentWorkspace();
+            if (restored?.project) {
+                this.store.loadWorkspace(restored.handle, restored.project);
+            } else {
+                // No recent workspace available, redirect to welcome
+                this.router.navigate(['/boas-vindas']);
+            }
+        }
+    }
 
     getActiveTemplate(manifest: ProjectManifest): Template | undefined {
         return manifest.templates.find(t => t.id === manifest.activeTemplateId) ?? manifest.templates[0];
@@ -101,7 +117,18 @@ export class EditorPageComponent {
 
     onSelect(layerId: string, id: string): void {
         this.activeLayerId = layerId;
-        this.store.selectAsset(layerId, id);
+        const tpl = this.store.activeTemplate;
+        if (!tpl) return;
+
+        // Get current selection for this layer
+        const currentSelection = tpl.selected[layerId];
+
+        // If clicking the same element, deselect it; otherwise select it
+        if (currentSelection === id) {
+            this.store.selectAsset(layerId, '');
+        } else {
+            this.store.selectAsset(layerId, id);
+        }
     }
 
     onPrev(layerId: string, items: AssetItem[], selectedId?: string): void {
@@ -237,18 +264,6 @@ export class EditorPageComponent {
             return;
         }
         this.store.loadWorkspace(selection.handle, selection.project);
-    }
-
-    async openProjectFolder(): Promise<void> {
-        const handle = this.store.currentWorkspaceHandle;
-        if (!handle) {
-            window.alert('Nenhum projeto aberto no momento.');
-            return;
-        }
-        const shown = await this.files.revealWorkspaceFolder(handle);
-        if (!shown) {
-            window.alert('Nao foi possivel abrir a pasta do projeto.');
-        }
     }
 
     onRenameProject(name: string): void {
