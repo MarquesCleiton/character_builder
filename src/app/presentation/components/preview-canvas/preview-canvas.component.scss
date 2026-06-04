@@ -30,6 +30,7 @@
     overflow: hidden;
     position: relative;
     cursor: grab;
+    touch-action: none;
 }
 
 .cb-preview__viewport:active {

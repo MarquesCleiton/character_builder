@@ -22,6 +22,11 @@ export class PreviewCanvasComponent implements AfterViewInit, OnChanges, OnDestr
     private isPanning = false;
     private panStart = { x: 0, y: 0 };
     private panOrigin = { x: 0, y: 0 };
+    private touchPanStart = { x: 0, y: 0 };
+    private touchPanOrigin = { x: 0, y: 0 };
+    private pinchStartDistance = 0;
+    private pinchStartZoom = 1;
+    private pinchStartPan = { x: 0, y: 0 };
     private _wheelHandler?: (e: WheelEvent) => void;
 
     templateOpacity = 0.5;
@@ -144,6 +149,62 @@ export class PreviewCanvasComponent implements AfterViewInit, OnChanges, OnDestr
         this.isPanning = false;
     }
 
+    onTouchStart(event: TouchEvent): void {
+        if (event.touches.length === 1) {
+            const touch = event.touches[0];
+            this.touchPanStart = { x: touch.clientX, y: touch.clientY };
+            this.touchPanOrigin = { ...this.pan };
+            this.isPanning = true;
+            return;
+        }
+
+        if (event.touches.length === 2) {
+            const [a, b] = [event.touches[0], event.touches[1]];
+            this.pinchStartDistance = this.touchDistance(a, b);
+            this.pinchStartZoom = this.zoom;
+            this.pinchStartPan = { ...this.pan };
+            this.isPanning = false;
+        }
+    }
+
+    onTouchMove(event: TouchEvent): void {
+        if (event.touches.length === 1 && this.isPanning) {
+            event.preventDefault();
+            const touch = event.touches[0];
+            const dx = touch.clientX - this.touchPanStart.x;
+            const dy = touch.clientY - this.touchPanStart.y;
+            this.pan = { x: this.touchPanOrigin.x + dx, y: this.touchPanOrigin.y + dy };
+            return;
+        }
+
+        if (event.touches.length === 2) {
+            event.preventDefault();
+            const [a, b] = [event.touches[0], event.touches[1]];
+            const distance = this.touchDistance(a, b);
+            if (!this.pinchStartDistance) return;
+
+            const ratio = distance / this.pinchStartDistance;
+            const newZoom = Math.min(4, Math.max(0.05, this.pinchStartZoom * ratio));
+            const rect = this.viewportRef.nativeElement.getBoundingClientRect();
+            const centerX = (a.clientX + b.clientX) / 2 - rect.left;
+            const centerY = (a.clientY + b.clientY) / 2 - rect.top;
+
+            const imgX = (centerX - this.pinchStartPan.x) / this.pinchStartZoom;
+            const imgY = (centerY - this.pinchStartPan.y) / this.pinchStartZoom;
+
+            this.zoom = newZoom;
+            this.pan = {
+                x: centerX - imgX * newZoom,
+                y: centerY - imgY * newZoom
+            };
+        }
+    }
+
+    onTouchEnd(): void {
+        this.isPanning = false;
+        this.pinchStartDistance = 0;
+    }
+
     onWheel(event: WheelEvent): void {
         event.preventDefault();
         const rect = this.viewportRef.nativeElement.getBoundingClientRect();
@@ -151,6 +212,12 @@ export class PreviewCanvasComponent implements AfterViewInit, OnChanges, OnDestr
         const mouseY = event.clientY - rect.top;
         const delta = event.deltaY > 0 ? -0.1 : 0.1;
         this._applyZoom(delta, mouseX, mouseY);
+    }
+
+    private touchDistance(a: Touch, b: Touch): number {
+        const dx = a.clientX - b.clientX;
+        const dy = a.clientY - b.clientY;
+        return Math.hypot(dx, dy);
     }
 
     private async draw(): Promise<void> {

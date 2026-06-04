@@ -20,6 +20,7 @@ export class TopbarComponent {
     readonly version = APP_VERSION;
 
     settingsOpen = false;
+    mobileMenuOpen = false;
     editingName = '';
 
     constructor(private readonly theme: ThemeService) { }
@@ -30,6 +31,15 @@ export class TopbarComponent {
 
     toggleTheme(): void {
         this.theme.toggle();
+        this.closeMobileMenu();
+    }
+
+    toggleMobileMenu(): void {
+        this.mobileMenuOpen = !this.mobileMenuOpen;
+    }
+
+    closeMobileMenu(): void {
+        this.mobileMenuOpen = false;
     }
 
     toggleSettings(): void {
@@ -58,5 +68,26 @@ export class TopbarComponent {
             input.value = '';
         }
         this.settingsOpen = false;
+        this.closeMobileMenu();
+    }
+
+    onOpenOrCreateProject(): void {
+        this.openOrCreateProject.emit();
+        this.closeMobileMenu();
+    }
+
+    onRandomize(): void {
+        this.randomize.emit();
+        this.closeMobileMenu();
+    }
+
+    onExportPng(): void {
+        this.exportPng.emit();
+        this.closeMobileMenu();
+    }
+
+    onHelp(): void {
+        this.help.emit();
+        this.closeMobileMenu();
     }
 }
