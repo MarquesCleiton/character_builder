@@ -55,12 +55,44 @@
                 </label>
 
                 <label class="cb-adjust__field">
-                    <span>Zoom</span>
+                    <span>Opacidade do template</span>
                     <div class="cb-adjust__slider-row">
-                        <input type="range" min="0.05" max="4" step="0.01" [(ngModel)]="scale" (input)="draw()"
+                        <input type="range" min="0" max="1" step="0.05" [(ngModel)]="templateOpacity" (input)="draw()"
                             class="cb-adjust__slider" />
-                        <input type="number" min="5" max="400" step="1" [value]="(scale * 100) | number:'1.0-0'"
-                            (change)="setScale($event)" class="cb-adjust__num-input" />
+                        <input type="number" min="0" max="100" step="1"
+                            [value]="(templateOpacity * 100) | number:'1.0-0'" (change)="setTemplateOpacity($event)"
+                            class="cb-adjust__num-input" />
+                    </div>
+                </label>
+
+                <label class="cb-adjust__field">
+                    <span>Escala uniforme</span>
+                    <div class="cb-adjust__slider-row">
+                        <input type="range" min="0.05" max="4" step="0.01" [ngModel]="(scaleX + scaleY) / 2"
+                            (ngModelChange)="scaleX = $event; scaleY = $event; draw()" class="cb-adjust__slider" />
+                        <input type="number" min="5" max="400" step="1"
+                            [value]="(((scaleX + scaleY) / 2) * 100) | number:'1.0-0'" (change)="setScale($event)"
+                            class="cb-adjust__num-input" />
+                    </div>
+                </label>
+
+                <label class="cb-adjust__field">
+                    <span>Esticar horizontal (X)</span>
+                    <div class="cb-adjust__slider-row">
+                        <input type="range" min="0.05" max="4" step="0.01" [(ngModel)]="scaleX" (input)="draw()"
+                            class="cb-adjust__slider" />
+                        <input type="number" min="5" max="400" step="1" [value]="(scaleX * 100) | number:'1.0-0'"
+                            (change)="setScaleX($event)" class="cb-adjust__num-input" />
+                    </div>
+                </label>
+
+                <label class="cb-adjust__field">
+                    <span>Esticar vertical (Y)</span>
+                    <div class="cb-adjust__slider-row">
+                        <input type="range" min="0.05" max="4" step="0.01" [(ngModel)]="scaleY" (input)="draw()"
+                            class="cb-adjust__slider" />
+                        <input type="number" min="5" max="400" step="1" [value]="(scaleY * 100) | number:'1.0-0'"
+                            (change)="setScaleY($event)" class="cb-adjust__num-input" />
                     </div>
                 </label>
 
@@ -77,7 +109,8 @@
                 <div class="cb-adjust__divider"></div>
                 <div class="cb-section-title">Recorte</div>
 
-                <button class="cb-adjust__reset-btn cb-adjust__crop-btn" type="button" (click)="enterCropMode()">
+                <button class="cb-adjust__reset-btn cb-adjust__crop-btn" type="button"
+                    (click)="enterCropMode('element')">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="6 2 6 8 2 8"></polyline>
@@ -87,6 +120,16 @@
                     </svg>
                     Recortar imagem
                 </button>
+
+                <div class="cb-adjust__divider"></div>
+                <div class="cb-section-title">Template</div>
+
+                <div class="cb-adjust__reset-row">
+                    <button class="cb-adjust__reset-btn" type="button" (click)="enterCropMode('template')"
+                        [disabled]="!templateImage">
+                        Recortar template
+                    </button>
+                </div>
 
                 <div class="cb-adjust__reset-row">
                     <button class="cb-adjust__reset-btn" type="button" (click)="center()">
@@ -109,8 +152,10 @@
 
                 <p class="cb-muted cb-adjust__hint">
                     <strong>&#8226; Arraste</strong> o elemento para mover.<br />
+                    <strong>&#8226; Setas do teclado</strong> = mover 1px por toque (Shift = 10px).<br />
                     <strong>&#8226; Canto NW</strong> (&#9711;) = rotacionar.<br />
-                    <strong>&#8226; Demais cantos</strong> (&#9633;) = escalar.
+                    <strong>&#8226; Cantos diagonais</strong> (&#9633;) = escala proporcional.<br />
+                    <strong>&#8226; Meio das bordas</strong> (&#9633;) = escala horizontal/vertical.
                 </p>
 
                 <button class="cb-btn-primary cb-adjust__save" type="button"
@@ -121,7 +166,7 @@
 
             <!-- ── MODO RECORTE ────────────────────────────────── -->
             <ng-container *ngIf="cropMode">
-                <div class="cb-section-title">Recorte</div>
+                <div class="cb-section-title">Recorte ({{ cropTarget === 'template' ? 'Template' : 'Elemento' }})</div>
 
                 <!-- Tipo de recorte -->
                 <div class="cb-crop-type-row">

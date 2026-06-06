@@ -17,6 +17,8 @@ export interface WorkspaceManifestTransform {
     x: number;
     y: number;
     escala: number;
+    escalaX?: number;
+    escalaY?: number;
     rotacao: number;
     opacidade: number;
 }
@@ -168,10 +170,7 @@ export class WorkspaceFilesService {
 
         const templateId = this.createId();
         const defaultCamadas: WorkspaceCamada[] = [
-            { id: this.createId(), nome: 'Pernas' },
-            { id: this.createId(), nome: 'Torso' },
-            { id: this.createId(), nome: 'Boca' },
-            { id: this.createId(), nome: 'Olhos' }
+            { id: this.createId(), nome: 'CAMADA 1' }
         ];
 
         for (const c of defaultCamadas) {
@@ -219,10 +218,21 @@ export class WorkspaceFilesService {
         return path;
     }
 
-    async saveAssetBlob(handle: FileSystemDirectoryHandle, layerId: string, fileName: string, blob: Blob): Promise<string> {
-        const normalized = fileName.endsWith('.png') ? fileName : `${fileName}.png`;
+    async ensureLayerFolder(handle: FileSystemDirectoryHandle, layerId: string): Promise<void> {
         await handle.getDirectoryHandle(layerId, { create: true });
-        const path = `${layerId}/${normalized}`;
+    }
+
+    async deleteLayerFolder(handle: FileSystemDirectoryHandle, layerId: string): Promise<void> {
+        try {
+            await handle.removeEntry(layerId, { recursive: true });
+        } catch {
+            // Ignore deletion failures to avoid blocking UI state updates.
+        }
+    }
+
+    async saveAssetBlob(handle: FileSystemDirectoryHandle, layerId: string, assetId: string, blob: Blob): Promise<string> {
+        await this.ensureLayerFolder(handle, layerId);
+        const path = `${layerId}/${assetId}.png`;
         await this.saveFile(handle, path, blob);
         return path;
     }
@@ -469,17 +479,30 @@ export class WorkspaceFilesService {
     }
 
     private toTransform(t?: WorkspaceManifestTransform): AssetTransform {
+        const uniform = t?.escala ?? 1;
         return {
             x: t?.x ?? 0,
             y: t?.y ?? 0,
-            scale: t?.escala ?? 1,
+            scaleX: t?.escalaX ?? uniform,
+            scaleY: t?.escalaY ?? uniform,
+            scale: uniform,
             rotation: t?.rotacao ?? 0,
             opacity: t?.opacidade ?? 1
         };
     }
 
     private fromTransform(t: AssetTransform): WorkspaceManifestTransform {
-        return { x: t.x, y: t.y, escala: t.scale, rotacao: t.rotation, opacidade: t.opacity ?? 1 };
+        const sx = t.scaleX ?? t.scale ?? 1;
+        const sy = t.scaleY ?? t.scale ?? 1;
+        return {
+            x: t.x,
+            y: t.y,
+            escala: (sx + sy) / 2,
+            escalaX: sx,
+            escalaY: sy,
+            rotacao: t.rotation,
+            opacidade: t.opacity ?? 1
+        };
     }
 
     private toHistory(entries: WorkspaceHistorySnapshot[]): ProjectManifest['history'] {

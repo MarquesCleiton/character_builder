@@ -24,10 +24,12 @@ export class ExportService {
             const asset = (template.assets[layer.id] ?? []).find(item => item.id === selectedId);
             if (!asset?.previewUrl) continue;
             const image = await this.loader.load(asset.previewUrl);
+            const scaleX = asset.transform.scaleX ?? asset.transform.scale ?? 1;
+            const scaleY = asset.transform.scaleY ?? asset.transform.scale ?? 1;
             context.save();
             context.translate(asset.transform.x, asset.transform.y);
             context.rotate((asset.transform.rotation * Math.PI) / 180);
-            context.scale(asset.transform.scale, asset.transform.scale);
+            context.scale(scaleX, scaleY);
             context.globalAlpha = asset.transform.opacity ?? 1;
             context.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
             context.restore();

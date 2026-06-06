@@ -9,7 +9,7 @@ import { EXPORT_HEIGHT, EXPORT_WIDTH } from '../../shared/constants/export.const
 import { WorkspaceFilesService } from '../services/workspace-files.service';
 
 const defaultTransform = (w: number, h: number): AssetTransform => ({
-    x: w / 2, y: h / 2, scale: 1, rotation: 0, opacity: 1
+    x: w / 2, y: h / 2, scaleX: 1, scaleY: 1, scale: 1, rotation: 0, opacity: 1
 });
 
 const emptyTemplate = (id: string, name: string): Template => ({
@@ -122,6 +122,10 @@ export class WorkspaceStore {
             }
         }
 
+        if (this.workspaceHandle) {
+            this.files.ensureLayerFolder(this.workspaceHandle, newLayer.id).catch(() => undefined);
+        }
+
         this.commitTemplate(template.id, { layers, assets: { ...template.assets, [newLayer.id]: [] } });
     }
 
@@ -161,6 +165,11 @@ export class WorkspaceStore {
         const selected = { ...template.selected }; delete selected[layerId];
         const locked = { ...template.locked }; delete locked[layerId];
         const hidden = { ...template.hidden }; delete hidden[layerId];
+
+        if (this.workspaceHandle) {
+            this.files.deleteLayerFolder(this.workspaceHandle, layerId).catch(() => undefined);
+        }
+
         this.commitTemplate(template.id, { layers, assets, selected, locked, hidden });
     }
 
@@ -183,12 +192,13 @@ export class WorkspaceStore {
         const safeName = this.sanitizeFileName(fileName);
         if (!safeName) return;
         const template = this.activeTemplate;
-        const filePath = await this.files.saveAssetBlob(this.workspaceHandle, layerId, safeName, blob);
+        const assetId = this.createId();
+        const filePath = await this.files.saveAssetBlob(this.workspaceHandle, layerId, assetId, blob);
         const previewUrl = await this.files.readFileAsObjectUrl(this.workspaceHandle, filePath);
         if (previewUrl) this.trackObjectUrl(previewUrl);
 
         const asset: AssetItem = {
-            id: this.createId(), name: safeName, layerId, filePath,
+            id: assetId, name: safeName, layerId, filePath,
             transform: transform ?? defaultTransform(template.canvasWidth, template.canvasHeight),
             createdAt: new Date().toISOString(), previewUrl
         };
@@ -206,7 +216,7 @@ export class WorkspaceStore {
         if (!existing) return;
         const safeName = this.sanitizeFileName(name);
         if (!safeName) return;
-        const filePath = await this.files.saveAssetBlob(this.workspaceHandle, layerId, safeName, blob);
+        const filePath = await this.files.saveAssetBlob(this.workspaceHandle, layerId, id, blob);
         const previewUrl = await this.files.readFileAsObjectUrl(this.workspaceHandle, filePath);
         if (existing.previewUrl) { URL.revokeObjectURL(existing.previewUrl); this.objectUrls.delete(existing.previewUrl); }
         if (previewUrl) this.trackObjectUrl(previewUrl);

@@ -1,7 +1,9 @@
 export interface AssetTransform {
     x: number;
     y: number;
-    scale: number;
+    scaleX: number;
+    scaleY: number;
+    scale?: number;
     rotation: number;
     opacity: number;
 }

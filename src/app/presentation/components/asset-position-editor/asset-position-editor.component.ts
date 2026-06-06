@@ -11,11 +11,17 @@ export class AssetPositionEditorComponent implements OnChanges {
     @Input() asset?: AssetItem;
     @Output() update = new EventEmitter<AssetTransform>();
 
-    transform: AssetTransform = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 };
+    transform: AssetTransform = { x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1, rotation: 0, opacity: 1 };
 
     ngOnChanges(): void {
         if (this.asset) {
-            this.transform = { ...this.asset.transform };
+            const t = this.asset.transform;
+            this.transform = {
+                ...t,
+                scaleX: t.scaleX ?? t.scale ?? 1,
+                scaleY: t.scaleY ?? t.scale ?? 1,
+                scale: t.scale ?? ((t.scaleX ?? 1) + (t.scaleY ?? 1)) / 2
+            };
         }
     }
 

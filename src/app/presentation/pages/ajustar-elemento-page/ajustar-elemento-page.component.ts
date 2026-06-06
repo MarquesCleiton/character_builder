@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { AssetTransform } from '../../../domain/models/asset-transform';
 import { AssetImportStateService } from '../../../infrastructure/services/asset-import-state.service';
@@ -24,22 +24,26 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
     pos = { x: 0, y: 0 };
     rotation = 0;
-    scale = 1;
+    scaleX = 1;
+    scaleY = 1;
     opacity = 1;
     templateOpacity = 0.25;
     templateViewZoom = 1;
     templateViewOffset = { x: 0, y: 0 };
 
-    private interaction: 'none' | 'move' | 'rotate' | 'scale' = 'none';
+    private interaction: 'none' | 'move' | 'rotate' | 'scale-uniform' | 'scale-x' | 'scale-y' = 'none';
     private dragStart = { x: 0, y: 0 };
+    private dragStartLocal = { x: 0, y: 0 };
     private posSnapshot = { x: 0, y: 0 };
     private rotSnapshot = 0;
-    private scaleSnapshot = 1;
+    private scaleXSnapshot = 1;
+    private scaleYSnapshot = 1;
 
     canvasCursor = 'default';
     isSaving = false;
 
     cropMode = false;
+    cropTarget: 'element' | 'template' = 'element';
     cropRect: { x: number; y: number; w: number; h: number } | null = null;
     cropType: 'rect' | 'oval' | 'freehand' = 'rect';
     cropViewZoom = 1;
@@ -57,6 +61,10 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     private touchPinchStartTemplateOffset = { x: 0, y: 0 };
     private touchPinchStartCropOffset = { x: 0, y: 0 };
     private touchPinchImagePoint = { x: 0, y: 0 };
+    private readonly rotateHandleRadius = 12;
+    private readonly cornerHandleSize = 14;
+    private readonly edgeHandleSize = 12;
+    private readonly interactionThreshold = 26;
 
     constructor(
         @Inject(WorkspaceStore) private readonly store: WorkspaceStore,
@@ -67,6 +75,15 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
     private get canvasW(): number { return this.store.activeTemplate?.canvasWidth ?? EXPORT_WIDTH; }
     private get canvasH(): number { return this.store.activeTemplate?.canvasHeight ?? EXPORT_HEIGHT; }
+    private get workspacePadding(): number { return Math.max(this.canvasW, this.canvasH); }
+    private get renderCanvasW(): number { return this.cropMode ? this.canvasW : this.canvasW + this.workspacePadding * 2; }
+    private get renderCanvasH(): number { return this.cropMode ? this.canvasH : this.canvasH + this.workspacePadding * 2; }
+    private get logicalOrigin(): { x: number; y: number } {
+        return this.cropMode ? { x: 0, y: 0 } : { x: this.workspacePadding, y: this.workspacePadding };
+    }
+    private get activeCropImage(): HTMLImageElement | null {
+        return this.cropTarget === 'template' ? this.templateImage : this.elementImage;
+    }
 
     ngOnInit(): void {
         if (!this.importState.pendingBlob) {
@@ -85,7 +102,8 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             if (existing?.transform) {
                 const t = existing.transform;
                 this.pos = { x: t.x, y: t.y };
-                this.scale = t.scale;
+                this.scaleX = t.scaleX ?? t.scale ?? 1;
+                this.scaleY = t.scaleY ?? t.scale ?? 1;
                 this.rotation = t.rotation;
             } else {
                 this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
@@ -104,7 +122,9 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
         const templateUrl = this.store.activeTemplate?.previewUrl;
         if (templateUrl) {
-            try { this.templateImage = await this.loader.load(templateUrl); } catch { /* no template */ }
+            try {
+                this.templateImage = await this.loader.load(templateUrl);
+            } catch { /* no template */ }
         }
 
         this.canvas?.addEventListener('wheel', this.wheelHandler, { passive: false });
@@ -127,9 +147,9 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         const ctx = canvas.getContext('2d');
         if (!ctx || !this.elementImage) return;
 
-        canvas.width = this.canvasW;
-        canvas.height = this.canvasH;
-        ctx.clearRect(0, 0, this.canvasW, this.canvasH);
+        canvas.width = this.renderCanvasW;
+        canvas.height = this.renderCanvasH;
+        ctx.clearRect(0, 0, this.renderCanvasW, this.renderCanvasH);
 
         if (this.cropMode) {
             this.drawCropMode(ctx);
@@ -139,34 +159,35 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         ctx.save();
         ctx.translate(this.templateViewOffset.x, this.templateViewOffset.y);
         ctx.scale(this.templateViewZoom, this.templateViewZoom);
+        const origin = this.logicalOrigin;
 
         if (this.templateImage) {
             ctx.save();
             ctx.globalAlpha = this.templateOpacity;
-            ctx.drawImage(this.templateImage, 0, 0, this.canvasW, this.canvasH);
+            ctx.drawImage(this.templateImage, origin.x, origin.y, this.canvasW, this.canvasH);
             ctx.restore();
         }
 
         ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
+        ctx.translate(origin.x + this.pos.x, origin.y + this.pos.y);
         ctx.rotate((this.rotation * Math.PI) / 180);
-        ctx.scale(this.scale, this.scale);
+        ctx.scale(this.scaleX, this.scaleY);
         ctx.globalAlpha = this.opacity;
         const hw = this.elementImage.naturalWidth / 2;
         const hh = this.elementImage.naturalHeight / 2;
         ctx.drawImage(this.elementImage, -hw, -hh);
         ctx.restore();
 
-        this.drawHandles(ctx);
+        this.drawHandles(ctx, origin);
         ctx.restore();
     }
 
-    private drawHandles(ctx: CanvasRenderingContext2D): void {
+    private drawHandles(ctx: CanvasRenderingContext2D, origin: { x: number; y: number }): void {
         if (!this.elementImage) return;
-        const hw = (this.elementImage.naturalWidth / 2) * this.scale;
-        const hh = (this.elementImage.naturalHeight / 2) * this.scale;
-        const cx = this.pos.x;
-        const cy = this.pos.y;
+        const hw = (this.elementImage.naturalWidth / 2) * this.scaleX;
+        const hh = (this.elementImage.naturalHeight / 2) * this.scaleY;
+        const cx = origin.x + this.pos.x;
+        const cy = origin.y + this.pos.y;
         const cos = Math.cos((this.rotation * Math.PI) / 180);
         const sin = Math.sin((this.rotation * Math.PI) / 180);
         const rotPoint = (lx: number, ly: number) => ({
@@ -179,10 +200,17 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             rotPoint(-hw, hh),
             rotPoint(hw, hh)
         ];
+        const mids = [
+            { x: (corners[0].x + corners[1].x) / 2, y: (corners[0].y + corners[1].y) / 2 },
+            { x: (corners[2].x + corners[3].x) / 2, y: (corners[2].y + corners[3].y) / 2 },
+            { x: (corners[0].x + corners[2].x) / 2, y: (corners[0].y + corners[2].y) / 2 },
+            { x: (corners[1].x + corners[3].x) / 2, y: (corners[1].y + corners[3].y) / 2 }
+        ];
 
         ctx.save();
         ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-        ctx.lineWidth = 1.5 / (this.scale * this.templateViewZoom);
+        const minScale = Math.max(0.05, Math.min(this.scaleX, this.scaleY));
+        ctx.lineWidth = 1.5 / (minScale * this.templateViewZoom);
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
         ctx.moveTo(corners[0].x, corners[0].y);
@@ -198,7 +226,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         ctx.strokeStyle = 'var(--cb-accent, #1f6feb)';
         ctx.lineWidth = 2 / this.templateViewZoom;
         ctx.beginPath();
-        ctx.arc(corners[0].x, corners[0].y, 8 / this.templateViewZoom, 0, Math.PI * 2);
+        ctx.arc(corners[0].x, corners[0].y, this.rotateHandleRadius / this.templateViewZoom, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.restore();
@@ -208,38 +236,73 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             ctx.fillStyle = '#fff';
             ctx.strokeStyle = '#888';
             ctx.lineWidth = 1.5 / this.templateViewZoom;
-            ctx.fillRect(pt.x - 5 / this.templateViewZoom, pt.y - 5 / this.templateViewZoom, 10 / this.templateViewZoom, 10 / this.templateViewZoom);
-            ctx.strokeRect(pt.x - 5 / this.templateViewZoom, pt.y - 5 / this.templateViewZoom, 10 / this.templateViewZoom, 10 / this.templateViewZoom);
+            const halfCorner = this.cornerHandleSize / 2;
+            ctx.fillRect(
+                pt.x - halfCorner / this.templateViewZoom,
+                pt.y - halfCorner / this.templateViewZoom,
+                this.cornerHandleSize / this.templateViewZoom,
+                this.cornerHandleSize / this.templateViewZoom
+            );
+            ctx.strokeRect(
+                pt.x - halfCorner / this.templateViewZoom,
+                pt.y - halfCorner / this.templateViewZoom,
+                this.cornerHandleSize / this.templateViewZoom,
+                this.cornerHandleSize / this.templateViewZoom
+            );
+            ctx.restore();
+        }
+
+        for (const pt of mids) {
+            ctx.save();
+            ctx.fillStyle = '#f8fbff';
+            ctx.strokeStyle = '#1a7abf';
+            ctx.lineWidth = 1.5 / this.templateViewZoom;
+            const halfEdge = this.edgeHandleSize / 2;
+            ctx.fillRect(
+                pt.x - halfEdge / this.templateViewZoom,
+                pt.y - halfEdge / this.templateViewZoom,
+                this.edgeHandleSize / this.templateViewZoom,
+                this.edgeHandleSize / this.templateViewZoom
+            );
+            ctx.strokeRect(
+                pt.x - halfEdge / this.templateViewZoom,
+                pt.y - halfEdge / this.templateViewZoom,
+                this.edgeHandleSize / this.templateViewZoom,
+                this.edgeHandleSize / this.templateViewZoom
+            );
             ctx.restore();
         }
     }
 
     private canvasToTemplateViewCoords(cx: number, cy: number): { x: number; y: number } {
+        const origin = this.logicalOrigin;
         return {
-            x: (cx - this.templateViewOffset.x) / this.templateViewZoom,
-            y: (cy - this.templateViewOffset.y) / this.templateViewZoom
+            x: (cx - this.templateViewOffset.x) / this.templateViewZoom - origin.x,
+            y: (cy - this.templateViewOffset.y) / this.templateViewZoom - origin.y
         };
     }
 
     private getCropFitTransform(): { fitScale: number; ox: number; oy: number } {
-        if (!this.elementImage) return { fitScale: 1, ox: 0, oy: 0 };
+        const image = this.activeCropImage;
+        if (!image) return { fitScale: 1, ox: 0, oy: 0 };
         const fitScale = Math.min(
-            (this.canvasW * 0.9) / this.elementImage.naturalWidth,
-            (this.canvasH * 0.9) / this.elementImage.naturalHeight
+            (this.canvasW * 0.9) / image.naturalWidth,
+            (this.canvasH * 0.9) / image.naturalHeight
         );
-        const iw = this.elementImage.naturalWidth * fitScale;
-        const ih = this.elementImage.naturalHeight * fitScale;
+        const iw = image.naturalWidth * fitScale;
+        const ih = image.naturalHeight * fitScale;
         return { fitScale, ox: (this.canvasW - iw) / 2, oy: (this.canvasH - ih) / 2 };
     }
 
     private getCropDisplayTransform(): { fitScale: number; ox: number; oy: number } {
-        if (!this.elementImage) return { fitScale: 1, ox: 0, oy: 0 };
+        const image = this.activeCropImage;
+        if (!image) return { fitScale: 1, ox: 0, oy: 0 };
         const fitScale = Math.min(
-            (this.canvasW * 0.9) / this.elementImage.naturalWidth,
-            (this.canvasH * 0.9) / this.elementImage.naturalHeight
+            (this.canvasW * 0.9) / image.naturalWidth,
+            (this.canvasH * 0.9) / image.naturalHeight
         ) * this.cropViewZoom;
-        const iw = this.elementImage.naturalWidth * fitScale;
-        const ih = this.elementImage.naturalHeight * fitScale;
+        const iw = image.naturalWidth * fitScale;
+        const ih = image.naturalHeight * fitScale;
         return { fitScale, ox: (this.canvasW - iw) / 2 + this.cropPanOffset.x, oy: (this.canvasH - ih) / 2 + this.cropPanOffset.y };
     }
 
@@ -249,13 +312,14 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     }
 
     private canvasToCropImageCoordsWithState(cx: number, cy: number, viewZoom: number, panOffset: { x: number; y: number }): { x: number; y: number } {
-        if (!this.elementImage) return { x: 0, y: 0 };
+        const image = this.activeCropImage;
+        if (!image) return { x: 0, y: 0 };
         const fitScale = Math.min(
-            (this.canvasW * 0.9) / this.elementImage.naturalWidth,
-            (this.canvasH * 0.9) / this.elementImage.naturalHeight
+            (this.canvasW * 0.9) / image.naturalWidth,
+            (this.canvasH * 0.9) / image.naturalHeight
         ) * viewZoom;
-        const iw = this.elementImage.naturalWidth * fitScale;
-        const ih = this.elementImage.naturalHeight * fitScale;
+        const iw = image.naturalWidth * fitScale;
+        const ih = image.naturalHeight * fitScale;
         const ox = (this.canvasW - iw) / 2 + panOffset.x;
         const oy = (this.canvasH - ih) / 2 + panOffset.y;
         return { x: (cx - ox) / fitScale, y: (cy - oy) / fitScale };
@@ -278,12 +342,13 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     }
 
     private drawCropMode(ctx: CanvasRenderingContext2D): void {
-        if (!this.elementImage) return;
+        const image = this.activeCropImage;
+        if (!image) return;
         const { fitScale, ox, oy } = this.getCropDisplayTransform();
-        const iw = this.elementImage.naturalWidth * fitScale;
-        const ih = this.elementImage.naturalHeight * fitScale;
+        const iw = image.naturalWidth * fitScale;
+        const ih = image.naturalHeight * fitScale;
 
-        ctx.drawImage(this.elementImage, ox, oy, iw, ih);
+        ctx.drawImage(image, ox, oy, iw, ih);
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(0, 0, this.canvasW, this.canvasH);
 
@@ -308,7 +373,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             ctx.rect(rx, ry, rw, rh);
         }
         ctx.clip();
-        ctx.drawImage(this.elementImage, ox, oy, iw, ih);
+        ctx.drawImage(image, ox, oy, iw, ih);
         ctx.restore();
 
         // Selection border
@@ -345,6 +410,8 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     }
 
     private drawFreehandSelection(ctx: CanvasRenderingContext2D, fitScale: number, ox: number, oy: number, iw: number, ih: number): void {
+        const image = this.activeCropImage;
+        if (!image) return;
         if (this.freehandPath.length < 2) return;
         const pts = this.freehandPath.map(p => ({ x: p.x * fitScale + ox, y: p.y * fitScale + oy }));
 
@@ -354,7 +421,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         for (const pt of pts.slice(1)) ctx.lineTo(pt.x, pt.y);
         if (!this.cropDragging) ctx.closePath();
         ctx.clip();
-        ctx.drawImage(this.elementImage!, ox, oy, iw, ih);
+        ctx.drawImage(image, ox, oy, iw, ih);
         ctx.restore();
 
         ctx.save();
@@ -395,21 +462,31 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     }
 
-    private getInteractionAt(mx: number, my: number): 'rotate' | 'scale' | 'move' | 'none' {
+    private getInteractionAt(mx: number, my: number): 'rotate' | 'scale-uniform' | 'scale-x' | 'scale-y' | 'move' | 'none' {
         if (!this.elementImage) return 'none';
-        const hw = (this.elementImage.naturalWidth / 2) * this.scale;
-        const hh = (this.elementImage.naturalHeight / 2) * this.scale;
+        const hw = (this.elementImage.naturalWidth / 2) * this.scaleX;
+        const hh = (this.elementImage.naturalHeight / 2) * this.scaleY;
         const cos = Math.cos((this.rotation * Math.PI) / 180);
         const sin = Math.sin((this.rotation * Math.PI) / 180);
         const rotPt = (lx: number, ly: number) => ({
             x: this.pos.x + lx * cos - ly * sin,
             y: this.pos.y + lx * sin + ly * cos
         });
-        const THRESH = 18;
+        const THRESH = this.interactionThreshold;
         const nw = rotPt(-hw, -hh);
         if (Math.hypot(mx - nw.x, my - nw.y) <= THRESH) return 'rotate';
         for (const c of [rotPt(hw, -hh), rotPt(-hw, hh), rotPt(hw, hh)]) {
-            if (Math.hypot(mx - c.x, my - c.y) <= THRESH) return 'scale';
+            if (Math.hypot(mx - c.x, my - c.y) <= THRESH) return 'scale-uniform';
+        }
+        const topMid = rotPt(0, -hh);
+        const bottomMid = rotPt(0, hh);
+        const leftMid = rotPt(-hw, 0);
+        const rightMid = rotPt(hw, 0);
+        for (const c of [leftMid, rightMid]) {
+            if (Math.hypot(mx - c.x, my - c.y) <= THRESH) return 'scale-x';
+        }
+        for (const c of [topMid, bottomMid]) {
+            if (Math.hypot(mx - c.x, my - c.y) <= THRESH) return 'scale-y';
         }
         const dx = mx - this.pos.x;
         const dy = my - this.pos.y;
@@ -426,16 +503,17 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         if (!pt) return;
 
         if (this.cropMode) {
+            const cropImage = this.activeCropImage;
             const before = this.canvasToCropImageCoords(pt.x, pt.y);
             const nextZoom = Math.max(1, Math.min(5, this.cropViewZoom * zoomFactor));
-            if (nextZoom === this.cropViewZoom || !this.elementImage) return;
+            if (nextZoom === this.cropViewZoom || !cropImage) return;
 
             const nextFitScale = Math.min(
-                (this.canvasW * 0.9) / this.elementImage.naturalWidth,
-                (this.canvasH * 0.9) / this.elementImage.naturalHeight
+                (this.canvasW * 0.9) / cropImage.naturalWidth,
+                (this.canvasH * 0.9) / cropImage.naturalHeight
             ) * nextZoom;
-            const baseOx = (this.canvasW - this.elementImage.naturalWidth * nextFitScale) / 2;
-            const baseOy = (this.canvasH - this.elementImage.naturalHeight * nextFitScale) / 2;
+            const baseOx = (this.canvasW - cropImage.naturalWidth * nextFitScale) / 2;
+            const baseOy = (this.canvasH - cropImage.naturalHeight * nextFitScale) / 2;
 
             this.cropViewZoom = nextZoom;
             this.cropPanOffset.x = pt.x - baseOx - before.x * nextFitScale;
@@ -443,12 +521,13 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             this.draw();
         } else {
             const before = this.canvasToTemplateViewCoords(pt.x, pt.y);
+            const origin = this.logicalOrigin;
             const nextZoom = Math.max(0.25, Math.min(8, this.templateViewZoom * zoomFactor));
             if (nextZoom === this.templateViewZoom) return;
 
             this.templateViewZoom = nextZoom;
-            this.templateViewOffset.x = pt.x - before.x * nextZoom;
-            this.templateViewOffset.y = pt.y - before.y * nextZoom;
+            this.templateViewOffset.x = pt.x - (before.x + origin.x) * nextZoom;
+            this.templateViewOffset.y = pt.y - (before.y + origin.y) * nextZoom;
             this.draw();
         }
     }
@@ -469,7 +548,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         }
         if (this.cropMode) {
             const pt = this.toCanvasCoords(event);
-            if (!pt || !this.elementImage) return;
+            if (!pt || !this.activeCropImage) return;
 
             if (this.cropPanMode) {
                 this.cropPanStart = { mx: pt.x, my: pt.y, ox: this.cropPanOffset.x, oy: this.cropPanOffset.y };
@@ -505,9 +584,11 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         if (!canvasPt) return;
         const pt = this.canvasToTemplateViewCoords(canvasPt.x, canvasPt.y);
         this.dragStart = pt;
+        this.dragStartLocal = this.toLocalCoords(pt.x, pt.y);
         this.posSnapshot = { ...this.pos };
         this.rotSnapshot = this.rotation;
-        this.scaleSnapshot = this.scale;
+        this.scaleXSnapshot = this.scaleX;
+        this.scaleYSnapshot = this.scaleY;
         this.interaction = this.getInteractionAt(pt.x, pt.y);
     }
 
@@ -601,7 +682,12 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
         if (this.interaction === 'none') {
             const hit = this.getInteractionAt(pt.x, pt.y);
-            this.canvasCursor = hit === 'rotate' ? 'crosshair' : hit === 'scale' ? 'nwse-resize' : hit === 'move' ? 'move' : 'default';
+            this.canvasCursor =
+                hit === 'rotate' ? 'crosshair'
+                    : hit === 'scale-uniform' ? 'nwse-resize'
+                        : hit === 'scale-x' ? 'ew-resize'
+                            : hit === 'scale-y' ? 'ns-resize'
+                                : hit === 'move' ? 'move' : 'default';
             return;
         }
 
@@ -615,10 +701,29 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             const angle = Math.atan2(my - this.pos.y, mx - this.pos.x);
             const startAngle = Math.atan2(this.dragStart.y - this.posSnapshot.y, this.dragStart.x - this.posSnapshot.x);
             this.rotation = this.rotSnapshot + ((angle - startAngle) * 180) / Math.PI;
-        } else if (this.interaction === 'scale') {
-            const dist = Math.hypot(mx - this.pos.x, my - this.pos.y);
-            const startDist = Math.hypot(this.dragStart.x - this.posSnapshot.x, this.dragStart.y - this.posSnapshot.y);
-            if (startDist > 0) this.scale = Math.max(0.05, this.scaleSnapshot * (dist / startDist));
+        } else if (this.interaction === 'scale-uniform' || this.interaction === 'scale-x' || this.interaction === 'scale-y') {
+            const local = this.toLocalCoords(mx, my);
+            if (this.interaction === 'scale-uniform') {
+                const startDist = Math.hypot(this.dragStartLocal.x, this.dragStartLocal.y);
+                const dist = Math.hypot(local.x, local.y);
+                if (startDist > 0) {
+                    const k = Math.max(0.05, dist / startDist);
+                    this.scaleX = Math.max(0.05, this.scaleXSnapshot * k);
+                    this.scaleY = Math.max(0.05, this.scaleYSnapshot * k);
+                }
+            } else if (this.interaction === 'scale-x') {
+                const startAbsX = Math.abs(this.dragStartLocal.x);
+                if (startAbsX > 0) {
+                    const kx = Math.max(0.05, Math.abs(local.x) / startAbsX);
+                    this.scaleX = Math.max(0.05, this.scaleXSnapshot * kx);
+                }
+            } else {
+                const startAbsY = Math.abs(this.dragStartLocal.y);
+                if (startAbsY > 0) {
+                    const ky = Math.max(0.05, Math.abs(local.y) / startAbsY);
+                    this.scaleY = Math.max(0.05, this.scaleYSnapshot * ky);
+                }
+            }
         }
 
         this.draw();
@@ -671,10 +776,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             } else {
                 this.touchPinchStartZoom = this.templateViewZoom;
                 this.touchPinchStartTemplateOffset = { ...this.templateViewOffset };
-                this.touchPinchImagePoint = {
-                    x: (mid.x - this.touchPinchStartTemplateOffset.x) / this.touchPinchStartZoom,
-                    y: (mid.y - this.touchPinchStartTemplateOffset.y) / this.touchPinchStartZoom
-                };
+                this.touchPinchImagePoint = this.canvasToTemplateViewCoords(mid.x, mid.y);
             }
             return;
         }
@@ -686,7 +788,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         if (!pt) return;
 
         if (this.cropMode) {
-            if (!this.elementImage) return;
+            if (!this.activeCropImage) return;
 
             if (this.cropPanMode) {
                 this.cropPanStart = { mx: pt.x, my: pt.y, ox: this.cropPanOffset.x, oy: this.cropPanOffset.y };
@@ -721,9 +823,11 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         if (!this.elementImage) return;
         const p = this.canvasToTemplateViewCoords(pt.x, pt.y);
         this.dragStart = p;
+        this.dragStartLocal = this.toLocalCoords(p.x, p.y);
         this.posSnapshot = { ...this.pos };
         this.rotSnapshot = this.rotation;
-        this.scaleSnapshot = this.scale;
+        this.scaleXSnapshot = this.scaleX;
+        this.scaleYSnapshot = this.scaleY;
         this.interaction = this.getInteractionAt(p.x, p.y);
     }
 
@@ -745,21 +849,23 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
                 const newZoom = Math.max(1, Math.min(5, this.touchPinchStartZoom * ratio));
                 this.cropViewZoom = newZoom;
 
-                if (this.elementImage) {
+                if (this.activeCropImage) {
+                    const cropImage = this.activeCropImage;
                     const fitScale = Math.min(
-                        (this.canvasW * 0.9) / this.elementImage.naturalWidth,
-                        (this.canvasH * 0.9) / this.elementImage.naturalHeight
+                        (this.canvasW * 0.9) / cropImage.naturalWidth,
+                        (this.canvasH * 0.9) / cropImage.naturalHeight
                     ) * newZoom;
-                    const baseOx = (this.canvasW - this.elementImage.naturalWidth * fitScale) / 2;
-                    const baseOy = (this.canvasH - this.elementImage.naturalHeight * fitScale) / 2;
+                    const baseOx = (this.canvasW - cropImage.naturalWidth * fitScale) / 2;
+                    const baseOy = (this.canvasH - cropImage.naturalHeight * fitScale) / 2;
                     this.cropPanOffset.x = mid.x - baseOx - this.touchPinchImagePoint.x * fitScale;
                     this.cropPanOffset.y = mid.y - baseOy - this.touchPinchImagePoint.y * fitScale;
                 }
             } else {
                 const newZoom = Math.max(0.25, Math.min(8, this.touchPinchStartZoom * ratio));
+                const origin = this.logicalOrigin;
                 this.templateViewZoom = newZoom;
-                this.templateViewOffset.x = mid.x - this.touchPinchImagePoint.x * newZoom;
-                this.templateViewOffset.y = mid.y - this.touchPinchImagePoint.y * newZoom;
+                this.templateViewOffset.x = mid.x - (this.touchPinchImagePoint.x + origin.x) * newZoom;
+                this.templateViewOffset.y = mid.y - (this.touchPinchImagePoint.y + origin.y) * newZoom;
             }
 
             this.draw();
@@ -826,10 +932,29 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             const angle = Math.atan2(p.y - this.pos.y, p.x - this.pos.x);
             const startAngle = Math.atan2(this.dragStart.y - this.posSnapshot.y, this.dragStart.x - this.posSnapshot.x);
             this.rotation = this.rotSnapshot + ((angle - startAngle) * 180) / Math.PI;
-        } else if (this.interaction === 'scale') {
-            const dist = Math.hypot(p.x - this.pos.x, p.y - this.pos.y);
-            const startDist = Math.hypot(this.dragStart.x - this.posSnapshot.x, this.dragStart.y - this.posSnapshot.y);
-            if (startDist > 0) this.scale = Math.max(0.05, this.scaleSnapshot * (dist / startDist));
+        } else if (this.interaction === 'scale-uniform' || this.interaction === 'scale-x' || this.interaction === 'scale-y') {
+            const local = this.toLocalCoords(p.x, p.y);
+            if (this.interaction === 'scale-uniform') {
+                const startDist = Math.hypot(this.dragStartLocal.x, this.dragStartLocal.y);
+                const dist = Math.hypot(local.x, local.y);
+                if (startDist > 0) {
+                    const k = Math.max(0.05, dist / startDist);
+                    this.scaleX = Math.max(0.05, this.scaleXSnapshot * k);
+                    this.scaleY = Math.max(0.05, this.scaleYSnapshot * k);
+                }
+            } else if (this.interaction === 'scale-x') {
+                const startAbsX = Math.abs(this.dragStartLocal.x);
+                if (startAbsX > 0) {
+                    const kx = Math.max(0.05, Math.abs(local.x) / startAbsX);
+                    this.scaleX = Math.max(0.05, this.scaleXSnapshot * kx);
+                }
+            } else {
+                const startAbsY = Math.abs(this.dragStartLocal.y);
+                if (startAbsY > 0) {
+                    const ky = Math.max(0.05, Math.abs(local.y) / startAbsY);
+                    this.scaleY = Math.max(0.05, this.scaleYSnapshot * ky);
+                }
+            }
         }
 
         this.draw();
@@ -854,6 +979,17 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         this.interaction = 'none';
     }
 
+    private toLocalCoords(mx: number, my: number): { x: number; y: number } {
+        const cos = Math.cos((this.rotation * Math.PI) / 180);
+        const sin = Math.sin((this.rotation * Math.PI) / 180);
+        const dx = mx - this.pos.x;
+        const dy = my - this.pos.y;
+        return {
+            x: dx * cos + dy * sin,
+            y: -dx * sin + dy * cos
+        };
+    }
+
     center(): void {
         this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
         this.draw();
@@ -862,14 +998,16 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     resetTransform(): void {
         this.pos = { x: this.canvasW / 2, y: this.canvasH / 2 };
         this.rotation = 0;
-        this.scale = 1;
+        this.scaleX = 1;
+        this.scaleY = 1;
         this.opacity = 1;
         this.templateViewZoom = 1;
         this.templateViewOffset = { x: 0, y: 0 };
         this.draw();
     }
 
-    enterCropMode(): void {
+    enterCropMode(target: 'element' | 'template' = 'element'): void {
+        this.cropTarget = target;
         this.cropMode = true;
         this.cropRect = null;
         this.freehandPath = [];
@@ -883,6 +1021,7 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
     cancelCrop(): void {
         this.cropMode = false;
+        this.cropTarget = 'element';
         this.cropRect = null;
         this.freehandPath = [];
         this.draw();
@@ -900,7 +1039,8 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
     }
 
     applyCrop(): void {
-        if (!this.elementImage) return;
+        const image = this.activeCropImage;
+        if (!image) return;
 
         if (this.cropType === 'freehand') {
             if (this.freehandPath.length < 3) return;
@@ -924,12 +1064,13 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
             ctx.clip();
         }
 
-        ctx.drawImage(this.elementImage, -Math.round(x), -Math.round(y));
-        this.commitCropCanvas(cropCanvas);
+        ctx.drawImage(image, -Math.round(x), -Math.round(y));
+        this.commitCropCanvas(cropCanvas, this.cropTarget).catch(() => undefined);
     }
 
     private applyFreehandCrop(): void {
-        if (!this.elementImage || this.freehandPath.length < 3) return;
+        const image = this.activeCropImage;
+        if (!image || this.freehandPath.length < 3) return;
         const xs = this.freehandPath.map(p => p.x);
         const ys = this.freehandPath.map(p => p.y);
         const minX = Math.min(...xs);
@@ -949,27 +1090,51 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         for (const pt of this.freehandPath.slice(1)) ctx.lineTo(pt.x - minX, pt.y - minY);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(this.elementImage, -Math.round(minX), -Math.round(minY));
-        this.commitCropCanvas(cropCanvas);
+        ctx.drawImage(image, -Math.round(minX), -Math.round(minY));
+        this.commitCropCanvas(cropCanvas, this.cropTarget).catch(() => undefined);
     }
 
-    private commitCropCanvas(cropCanvas: HTMLCanvasElement): void {
+    private async commitCropCanvas(cropCanvas: HTMLCanvasElement, target: 'element' | 'template'): Promise<void> {
         const dataUrl = cropCanvas.toDataURL('image/png');
         const byteString = atob(dataUrl.split(',')[1]);
         const ab = new Uint8Array(byteString.length);
         for (let i = 0; i < byteString.length; i++) ab[i] = byteString.charCodeAt(i);
-        this.importState.pendingBlob = new Blob([ab], { type: 'image/png' });
-        if (this.elementUrl) URL.revokeObjectURL(this.elementUrl);
-        this.elementUrl = URL.createObjectURL(this.importState.pendingBlob);
-        const newImg = new Image();
-        newImg.onload = () => {
-            this.elementImage = newImg;
-            this.cropMode = false;
-            this.cropRect = null;
-            this.freehandPath = [];
-            this.draw();
-        };
-        newImg.src = dataUrl;
+        const blob = new Blob([ab], { type: 'image/png' });
+
+        if (target === 'element') {
+            this.importState.pendingBlob = blob;
+            if (this.elementUrl) URL.revokeObjectURL(this.elementUrl);
+            this.elementUrl = URL.createObjectURL(this.importState.pendingBlob);
+            const newImg = new Image();
+            newImg.onload = () => {
+                this.elementImage = newImg;
+                this.cropMode = false;
+                this.cropTarget = 'element';
+                this.cropRect = null;
+                this.freehandPath = [];
+                this.draw();
+            };
+            newImg.src = dataUrl;
+            return;
+        }
+
+        const templateId = this.store.activeTemplate?.id;
+        if (!templateId) return;
+        const file = new File([blob], `template_${templateId}_editado.png`, { type: 'image/png' });
+        await this.store.updateTemplateImage(templateId, file);
+        const templateUrl = this.store.activeTemplate?.previewUrl;
+        if (templateUrl) {
+            try {
+                this.templateImage = await this.loader.load(templateUrl);
+            } catch {
+                // ignore
+            }
+        }
+        this.cropMode = false;
+        this.cropTarget = 'element';
+        this.cropRect = null;
+        this.freehandPath = [];
+        this.draw();
     }
 
     setOpacity(event: Event): void {
@@ -979,7 +1144,62 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
 
     setScale(event: Event): void {
         const v = parseFloat((event.target as HTMLInputElement).value);
-        if (!isNaN(v) && v > 0) { this.scale = Math.max(0.05, Math.min(4, v / 100)); this.draw(); }
+        if (!isNaN(v) && v > 0) {
+            const s = Math.max(0.05, Math.min(4, v / 100));
+            this.scaleX = s;
+            this.scaleY = s;
+            this.draw();
+        }
+    }
+
+    setScaleX(event: Event): void {
+        const v = parseFloat((event.target as HTMLInputElement).value);
+        if (!isNaN(v) && v > 0) { this.scaleX = Math.max(0.05, Math.min(4, v / 100)); this.draw(); }
+    }
+
+    setScaleY(event: Event): void {
+        const v = parseFloat((event.target as HTMLInputElement).value);
+        if (!isNaN(v) && v > 0) { this.scaleY = Math.max(0.05, Math.min(4, v / 100)); this.draw(); }
+    }
+
+    setTemplateOpacity(event: Event): void {
+        const v = parseFloat((event.target as HTMLInputElement).value);
+        if (!isNaN(v)) { this.templateOpacity = Math.max(0, Math.min(1, v / 100)); this.draw(); }
+    }
+
+    @HostListener('window:keydown', ['$event'])
+    onWindowKeyDown(event: KeyboardEvent): void {
+        if (this.cropMode || this.isSaving) return;
+        const target = event.target as HTMLElement | null;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+            return;
+        }
+        const step = event.shiftKey ? 10 : (event.repeat ? 3 : 1);
+        let moved = false;
+        switch (event.key) {
+            case 'ArrowUp':
+                this.pos.y -= step;
+                moved = true;
+                break;
+            case 'ArrowDown':
+                this.pos.y += step;
+                moved = true;
+                break;
+            case 'ArrowLeft':
+                this.pos.x -= step;
+                moved = true;
+                break;
+            case 'ArrowRight':
+                this.pos.x += step;
+                moved = true;
+                break;
+            default:
+                break;
+        }
+        if (moved) {
+            event.preventDefault();
+            this.draw();
+        }
     }
 
     setRotation(event: Event): void {
@@ -994,7 +1214,9 @@ export class AjustarElementoPageComponent implements OnInit, AfterViewInit, OnDe
         const transform: AssetTransform = {
             x: this.pos.x,
             y: this.pos.y,
-            scale: this.scale,
+            scaleX: this.scaleX,
+            scaleY: this.scaleY,
+            scale: (this.scaleX + this.scaleY) / 2,
             rotation: this.rotation,
             opacity: 1
         };
